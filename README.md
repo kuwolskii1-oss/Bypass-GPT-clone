@@ -50,7 +50,9 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 - `humanize.ts` — protects keywords/URLs/code, replaces phrases and openers, applies contractions at a register-dependent rate, drops intensifiers, simplifies vocabulary, splits long sentences and merges neighbours (folding "So," / "Still," into clauses) so rhythm varies, fixes articles and capitalisation, and re-scores.
 - `samples.ts` — the three "Try a sample" texts used for calibration tests.
 
-Calibration on the bundled samples: the AI-style essay scores 100, the human blog post 0, the mixed draft 54. Aggressive humanizing takes the essay from 100 to the low 40s (mixed) with the local engine; the Claude engine rewrites more deeply.
+Rewrites go through the sentence-initial transition rules before phrase replacement (so "Furthermore, X" becomes "Also, X" and never "And, X"), split long sentences at the most uneven natural break, never re-join a sentence they just split, and skip chatty alternatives ("Plus,", "folks") when the purpose is an essay, report, business, legal or cover-letter piece or readability is Doctorate.
+
+Calibration on the bundled samples: the AI-style essay scores 100, the human blog post 0, the mixed draft 54. Aggressive humanizing takes the essay from 100 to the mid 40s (mixed) with the local engine; the Claude engine rewrites more deeply. For texts up to 3,000 words the local engine generates five candidate rewrites and returns the one our detector scores lowest, so results are stable across seeds. Ten ChatGPT-style fixtures in `src/lib/engine/__tests__/fixtures.ts` guard against awkward rewrites (agreement after a split `which` clause, inverted `not only`, statements joined onto instructions, register slips in essays).
 
 ## Project layout
 

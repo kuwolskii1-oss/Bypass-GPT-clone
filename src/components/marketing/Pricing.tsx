@@ -118,7 +118,8 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
         </ul>
 
         <p className="mt-6 text-center text-sm text-faint">
-          Words are counted on the humanizer only and reset at the start of each term. Detection is always free.
+          Cancel any time. Words are counted on the humanizer only and reset at the start of each term; they do not
+          roll over. Detection is always free.
         </p>
       </div>
     </section>
