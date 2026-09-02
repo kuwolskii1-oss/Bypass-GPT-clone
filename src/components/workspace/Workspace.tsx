@@ -20,7 +20,7 @@ import {
   type HumanizeResult,
 } from "@/lib/engine/types";
 import { addHistoryEntry, addUsage, type HistoryEntry } from "@/lib/history";
-import { PLANS } from "@/lib/site";
+import { FREE_ALLOWANCE } from "@/lib/site";
 import { useUsage } from "@/lib/use-storage";
 import { cn, countWords, formatNumber } from "@/lib/utils";
 
@@ -36,7 +36,6 @@ type Busy = "detect" | "humanize" | null;
 
 /** sessionStorage key the dashboard uses to hand an old entry back to the editor. */
 export const OPEN_ENTRY_KEY = "prosely.open";
-const FREE_PLAN = PLANS[0];
 
 function excerpt(text: string): string {
   const t = text.trim().replace(/\s+/g, " ");
@@ -60,7 +59,7 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
   const words = countWords(text);
   const tooShort = words < LIMITS.minWords;
   const tooLong = words > LIMITS.freeMaxWords;
-  const remaining = Math.max(0, FREE_PLAN.wordsPerMonth - usage.wordsUsed);
+  const remaining = Math.max(0, FREE_ALLOWANCE.words - usage.wordsUsed);
   const outOfWords = words > remaining;
   const canRun = !busy && !tooShort && !tooLong && text.trim().length > 0;
 
@@ -177,14 +176,18 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
   } else if (mode === "humanize" && outOfWords && words > 0) {
     hint = (
       <>
-        You have {formatNumber(remaining)} free words left this month.{" "}
+        You have {formatNumber(remaining)} free words left in this {FREE_ALLOWANCE.weeks}-week period.{" "}
         <Link href="/pricing" className="text-accent underline-offset-2 hover:underline">
           See plans
         </Link>
       </>
     );
   } else if (mode === "humanize") {
-    hint = <>{formatNumber(remaining)} free humanizer words left this month · Detection is always free</>;
+    hint = (
+      <>
+        {formatNumber(remaining)} free humanizer words left this {FREE_ALLOWANCE.weeks}-week period · Detection is always free
+      </>
+    );
   } else {
     hint = <>Detection is free and unlimited · Scores are estimates, not a verdict on authorship</>;
   }

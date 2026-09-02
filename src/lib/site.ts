@@ -60,14 +60,32 @@ export const FOOTER_LINKS = [
 
 export type PlanId = "free" | "starter" | "pro" | "business";
 
+/** Billing terms. Every paid plan is sold for 1, 4 or 12 weeks. */
+export const BILLING_PERIODS = [
+  { id: "1w", label: "1 week", weeks: 1, billed: "Billed weekly, cancel any time" },
+  { id: "4w", label: "4 weeks", weeks: 4, billed: "Billed every 4 weeks" },
+  { id: "12w", label: "12 weeks", weeks: 12, billed: "Billed every 12 weeks" },
+] as const;
+export type PeriodId = (typeof BILLING_PERIODS)[number]["id"];
+export const DEFAULT_PERIOD: PeriodId = "4w";
+
+/** The free tier: a rolling 4-week allowance, no card, no account. */
+export const FREE_ALLOWANCE = { words: 1500, weeks: 4 } as const;
+
+export interface PlanPrice {
+  /** Total price for the period, in USD. */
+  price: number;
+  /** Humanizer words included for the whole period. */
+  words: number;
+}
+
 export interface Plan {
   id: PlanId;
   name: string;
-  monthly: number;
-  yearlyMonthly: number;
-  wordsPerMonth: number;
-  wordsPerRequest: number;
   blurb: string;
+  wordsPerRequest: number;
+  /** Price and allowance per billing period. The free plan is 0 everywhere. */
+  prices: Record<PeriodId, PlanPrice>;
   features: string[];
   cta: string;
   highlighted?: boolean;
@@ -77,30 +95,33 @@ export const PLANS: Plan[] = [
   {
     id: "free",
     name: "Free",
-    monthly: 0,
-    yearlyMonthly: 0,
-    wordsPerMonth: 1500,
-    wordsPerRequest: 500,
     blurb: "Try the detector and humanizer with no account.",
+    wordsPerRequest: 500,
+    prices: {
+      "1w": { price: 0, words: FREE_ALLOWANCE.words },
+      "4w": { price: 0, words: FREE_ALLOWANCE.words },
+      "12w": { price: 0, words: FREE_ALLOWANCE.words },
+    },
     features: [
-      "1,500 humanizer words / month",
       "Unlimited AI detection",
       "Estimates across 12 detectors",
       "Sentence-level highlights",
       "500 words per request",
+      "History in your browser",
     ],
     cta: "Start for free",
   },
   {
     id: "starter",
     name: "Starter",
-    monthly: 9.99,
-    yearlyMonthly: 5.99,
-    wordsPerMonth: 20000,
-    wordsPerRequest: 2000,
     blurb: "For students and occasional writers.",
+    wordsPerRequest: 2000,
+    prices: {
+      "1w": { price: 3.99, words: 5000 },
+      "4w": { price: 9.99, words: 20000 },
+      "12w": { price: 24.99, words: 60000 },
+    },
     features: [
-      "20,000 words / month",
       "All readability and purpose modes",
       "Aggressive rewrite strength",
       "Keep-keywords list",
@@ -112,13 +133,14 @@ export const PLANS: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    monthly: 19.99,
-    yearlyMonthly: 12.99,
-    wordsPerMonth: 60000,
-    wordsPerRequest: 5000,
     blurb: "For marketers, freelancers and editors.",
+    wordsPerRequest: 5000,
+    prices: {
+      "1w": { price: 7.99, words: 15000 },
+      "4w": { price: 19.99, words: 60000 },
+      "12w": { price: 49.99, words: 180000 },
+    },
     features: [
-      "60,000 words / month",
       "Everything in Starter",
       "Downloadable writing reports",
       "Batch humanizing",
@@ -131,22 +153,34 @@ export const PLANS: Plan[] = [
   {
     id: "business",
     name: "Business",
-    monthly: 49,
-    yearlyMonthly: 34,
-    wordsPerMonth: 200000,
-    wordsPerRequest: 10000,
     blurb: "For agencies and teams that publish at scale.",
-    features: [
-      "200,000 words / month",
-      "Everything in Pro",
-      "API access",
-      "5 team seats",
-      "Usage analytics",
-      "Dedicated support",
-    ],
+    wordsPerRequest: 10000,
+    prices: {
+      "1w": { price: 19, words: 50000 },
+      "4w": { price: 49, words: 200000 },
+      "12w": { price: 129, words: 600000 },
+    },
+    features: ["Everything in Pro", "API access", "5 team seats", "Usage analytics", "Dedicated support"],
     cta: "Talk to us",
   },
 ];
+
+/** Price per week for a plan on a period, for like-for-like comparison. */
+export function weeklyPrice(plan: Plan, period: PeriodId): number {
+  const weeks = BILLING_PERIODS.find((b) => b.id === period)?.weeks ?? 1;
+  return plan.prices[period].price / weeks;
+}
+
+/** Largest saving (0..1) any paid plan gets on `period` versus paying week by week. */
+export function maxSaving(period: PeriodId): number {
+  let best = 0;
+  for (const plan of PLANS) {
+    const weekly = plan.prices["1w"].price;
+    if (weekly <= 0) continue;
+    best = Math.max(best, 1 - weeklyPrice(plan, period) / weekly);
+  }
+  return best;
+}
 
 export const FAQS = [
   {
@@ -163,7 +197,7 @@ export const FAQS = [
   },
   {
     q: "Is there a free plan?",
-    a: "Yes. Detection is free and unlimited, and you get 1,500 humanizer words a month without a card. Paid plans raise the monthly and per-request limits.",
+    a: "Yes. Detection is free and unlimited, and you get 1,500 humanizer words every 4 weeks without a card. Paid plans come in 1-week, 4-week and 12-week terms and raise both the period and per-request limits.",
   },
   {
     q: "Which languages do you support?",

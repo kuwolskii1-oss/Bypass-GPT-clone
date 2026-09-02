@@ -8,8 +8,8 @@ A clean, production-shaped clone of the AI-detection and humanizer category (Und
 - **Detector estimates** — one panel estimates how 12 public detectors (GPTZero, Turnitin, Originality.ai, Copyleaks, ZeroGPT, Winston, Sapling, Writer, QuillBot, Grammarly, Crossplag, Content at Scale) would likely score the text. These are estimates from our own model, labelled as such everywhere; they are not live third-party results.
 - **Writing report** — a Turnitin-like layout: document on the left, "Submission breakdown" on the right with the percentage of qualifying text, a segmented bar, legend, flags and disclaimers. Below 20% the score shows as `*` and highlights are off by default. Downloadable as a standalone HTML file.
 - **Humanizer** — rewrites text with controls for readability (High school → Marketing), purpose (Essay, Article, Cover letter, Legal…), strength (Light / Balanced / Aggressive) and a keep-keywords list that is preserved verbatim. Output shows before/after scores, an edit count, a Highlights tab and a word-level Compare diff. Re-humanize produces a new variant.
-- **Dashboard** — usage ring against the free plan, history of checks and rewrites (kept in the browser), reopen any entry.
-- **Marketing site** — landing page with the tool embedded in the hero, how it works, features, report preview, detector grid, use cases, comparison, testimonials, pricing with a monthly/yearly toggle, FAQ, and a pricing page.
+- **Dashboard** — usage ring against the free allowance (1,500 words per rolling 4 weeks), history of checks and rewrites (kept in the browser), reopen any entry.
+- **Marketing site** — landing page with the tool embedded in the hero, how it works, features, report preview, detector grid, use cases, comparison, testimonials, pricing with a 1 / 4 / 12 week term switch, FAQ, and a pricing page with a compare table.
 
 ## Quick start
 

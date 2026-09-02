@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { OPEN_ENTRY_KEY } from "@/components/workspace/Workspace";
-import { clearHistory, removeHistoryEntry, type HistoryEntry } from "@/lib/history";
-import { PLANS } from "@/lib/site";
+import { clearHistory, removeHistoryEntry, usagePeriodEnd, type HistoryEntry } from "@/lib/history";
+import { FREE_ALLOWANCE, PLANS } from "@/lib/site";
 import { useHistory, useHydrated, useUsage } from "@/lib/use-storage";
 import { cn, formatNumber } from "@/lib/utils";
 
@@ -65,7 +65,8 @@ export function Dashboard() {
     humanized.length > 0
       ? Math.round(humanized.reduce((s, h) => s + (h.aiBefore - (h.aiAfter ?? h.aiBefore)), 0) / humanized.length)
       : 0;
-  const remaining = Math.max(0, FREE_PLAN.wordsPerMonth - usage.wordsUsed);
+  const remaining = Math.max(0, FREE_ALLOWANCE.words - usage.wordsUsed);
+  const resetsOn = usagePeriodEnd(usage);
 
   return (
     <div className="wrap py-12 sm:py-16">
@@ -87,16 +88,19 @@ export function Dashboard() {
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
         <div className="card flex items-center gap-5 p-5 md:col-span-1">
-          <UsageRing used={usage.wordsUsed} total={FREE_PLAN.wordsPerMonth} />
+          <UsageRing used={usage.wordsUsed} total={FREE_ALLOWANCE.words} />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-ink">{FREE_PLAN.name} plan</span>
               <Badge tone="accent">Current</Badge>
             </div>
             <p className="mt-1 text-sm text-muted">
-              {formatNumber(usage.wordsUsed)} of {formatNumber(FREE_PLAN.wordsPerMonth)} words used
+              {formatNumber(usage.wordsUsed)} of {formatNumber(FREE_ALLOWANCE.words)} words used
             </p>
-            <p className="text-xs text-faint">{formatNumber(remaining)} left this month</p>
+            <p className="text-xs text-faint">
+              {formatNumber(remaining)} left in this {FREE_ALLOWANCE.weeks}-week period
+              {resetsOn ? ` · resets ${resetsOn.toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+            </p>
             <Button href="/pricing" variant="soft" size="sm" className="mt-3" iconRight={<ArrowUpRight className="size-3.5" />}>
               Upgrade
             </Button>

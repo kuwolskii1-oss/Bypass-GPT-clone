@@ -12,7 +12,7 @@ export function CtaBand() {
           Make your next draft read like you.
         </h2>
         <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-white/60">
-          Free detection, 1,500 humanizer words a month, and no account needed to start.
+          Free detection, 1,500 humanizer words every 4 weeks, and no account needed to start.
         </p>
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button href="/humanizer" variant="accent" size="lg">

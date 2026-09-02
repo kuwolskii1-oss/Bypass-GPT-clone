@@ -4,9 +4,19 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Switch } from "@/components/ui/Switch";
+import { Segmented } from "@/components/ui/Segmented";
 import { SectionHeading } from "@/components/marketing/SectionHeading";
-import { PLANS, SITE, type Plan } from "@/lib/site";
+import {
+  BILLING_PERIODS,
+  DEFAULT_PERIOD,
+  FREE_ALLOWANCE,
+  PLANS,
+  SITE,
+  maxSaving,
+  weeklyPrice,
+  type PeriodId,
+  type Plan,
+} from "@/lib/site";
 import { cn, formatNumber } from "@/lib/utils";
 
 function ctaHref(plan: Plan): string {
@@ -15,18 +25,16 @@ function ctaHref(plan: Plan): string {
   return "/dashboard";
 }
 
-function money(n: number): string {
+export function money(n: number): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
-function billingNote(plan: Plan, yearly: boolean): string {
-  if (plan.monthly === 0) return "Free forever, no card needed";
-  if (yearly) return `Billed yearly · $${money(plan.yearlyMonthly * 12)}/yr`;
-  return "Billed monthly, cancel any time";
-}
+const PERIOD_OPTIONS = BILLING_PERIODS.map((b) => ({ value: b.id, label: b.label }));
 
 export function Pricing({ heading = true }: { heading?: boolean }) {
-  const [yearly, setYearly] = useState(true);
+  const [period, setPeriod] = useState<PeriodId>(DEFAULT_PERIOD);
+  const term = BILLING_PERIODS.find((b) => b.id === period) ?? BILLING_PERIODS[1];
+  const saving = Math.round(maxSaving(period) * 100);
 
   return (
     <section id="pricing" className={cn(heading ? "py-20 sm:py-28" : "pb-20 pt-10 sm:pb-28 sm:pt-12")}>
@@ -35,32 +43,24 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
           <SectionHeading
             eyebrow="Pricing"
             title="Start free. Upgrade when you write more."
-            lede="Every plan includes unlimited detection. Paid plans raise how many words the humanizer will rewrite."
+            lede="Every plan includes unlimited detection. Pick a 1, 4 or 12 week term; longer terms cost less per week and include more words."
           />
         )}
 
         <div className={cn("flex flex-wrap items-center justify-center gap-3", heading && "mt-10")}>
-          <button
-            type="button"
-            onClick={() => setYearly(false)}
-            className={cn("text-sm transition-colors", yearly ? "text-muted hover:text-ink" : "text-ink")}
-          >
-            Monthly
-          </button>
-          <Switch checked={yearly} onChange={setYearly} label="Bill yearly" />
-          <button
-            type="button"
-            onClick={() => setYearly(true)}
-            className={cn("text-sm transition-colors", yearly ? "text-ink" : "text-muted hover:text-ink")}
-          >
-            Yearly
-          </button>
-          <Badge tone="accent">Save up to 40%</Badge>
+          <Segmented value={period} options={PERIOD_OPTIONS} onChange={setPeriod} size="md" label="Billing term" className="[&>span]:sr-only" />
+          {saving > 0 ? (
+            <Badge tone="accent">Save up to {saving}% vs weekly</Badge>
+          ) : (
+            <Badge tone="neutral">Pay week by week</Badge>
+          )}
         </div>
 
         <ul className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {PLANS.map((plan) => {
-            const price = plan.monthly === 0 ? 0 : yearly ? plan.yearlyMonthly : plan.monthly;
+            const tier = plan.prices[period];
+            const free = plan.id === "free";
+            const perWeek = weeklyPrice(plan, period);
             return (
               <li
                 key={plan.id}
@@ -77,16 +77,24 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
                 <h3 className="text-base font-medium text-ink">{plan.name}</h3>
                 <p className="mt-1 text-sm leading-6 text-muted">{plan.blurb}</p>
 
-                <div className="mt-5 flex items-baseline gap-1">
-                  <span className="text-4xl font-medium tracking-[-0.03em] text-ink">${money(price)}</span>
-                  {price > 0 && <span className="text-sm text-muted">/mo</span>}
+                <div className="mt-5 flex items-baseline gap-1.5">
+                  <span className="text-4xl font-medium tracking-[-0.03em] text-ink">${money(tier.price)}</span>
+                  {!free && <span className="text-sm text-muted">/ {term.label}</span>}
                 </div>
-                <p className="mt-1 text-xs text-faint">{billingNote(plan, yearly)}</p>
+                <p className="mt-1 text-xs text-faint">
+                  {free
+                    ? "Free forever, no card needed"
+                    : term.weeks === 1
+                      ? term.billed
+                      : `$${perWeek.toFixed(2)} per week · ${term.billed}`}
+                </p>
 
                 <dl className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-surface p-3">
                   <div>
-                    <dt className="text-[11px] text-faint">Words / month</dt>
-                    <dd className="mt-0.5 text-sm font-medium text-ink">{formatNumber(plan.wordsPerMonth)}</dd>
+                    <dt className="text-[11px] text-faint">
+                      Words / {free ? `${FREE_ALLOWANCE.weeks} weeks` : term.label}
+                    </dt>
+                    <dd className="mt-0.5 text-sm font-medium text-ink">{formatNumber(tier.words)}</dd>
                   </div>
                   <div>
                     <dt className="text-[11px] text-faint">Per request</dt>
@@ -114,7 +122,7 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
         </ul>
 
         <p className="mt-6 text-center text-sm text-faint">
-          Words are counted on the humanizer only. Detection is always free.
+          Words are counted on the humanizer only and reset at the start of each term. Detection is always free.
         </p>
       </div>
     </section>

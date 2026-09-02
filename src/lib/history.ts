@@ -3,6 +3,7 @@
  * unless the user signs in later and opts into cloud history.
  */
 import type { HumanizeOptions, Verdict } from "@/lib/engine/types";
+import { FREE_ALLOWANCE } from "@/lib/site";
 
 export interface HistoryEntry {
   id: string;
@@ -98,28 +99,35 @@ export function clearHistory(): void {
 }
 
 export interface Usage {
-  /** Humanizer words used this calendar month. */
+  /** Humanizer words used in the current rolling period. */
   wordsUsed: number;
-  /** "YYYY-MM" of the month the counter belongs to. */
-  period: string;
+  /** Timestamp the current period started, or 0 before the first rewrite. */
+  periodStart: number;
 }
 
-function currentPeriod(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+const PERIOD_MS = FREE_ALLOWANCE.weeks * 7 * 24 * 60 * 60 * 1000;
+
+/** When the current free-plan period resets, or null before the first rewrite. */
+export function usagePeriodEnd(usage: Usage): Date | null {
+  return usage.periodStart > 0 ? new Date(usage.periodStart + PERIOD_MS) : null;
 }
 
-const ZERO_USAGE: Usage = { wordsUsed: 0, period: "" };
+const ZERO_USAGE: Usage = { wordsUsed: 0, periodStart: 0 };
 let usageCache: { raw: string | null; value: Usage } = { raw: null, value: ZERO_USAGE };
 
-/** Stable snapshot of this month's usage. */
+function isCurrent(u: Usage): boolean {
+  return u.periodStart > 0 && Date.now() - u.periodStart < PERIOD_MS;
+}
+
+/** Stable snapshot of the current period's usage. */
 export function loadUsage(): Usage {
   if (typeof window === "undefined") return ZERO_USAGE;
   try {
     const raw = window.localStorage.getItem(USAGE_KEY);
     if (raw !== usageCache.raw) {
-      const stored = safeParse<Usage>(raw, ZERO_USAGE);
-      usageCache = { raw, value: stored.period === currentPeriod() ? stored : ZERO_USAGE };
+      const stored = safeParse<Partial<Usage>>(raw, ZERO_USAGE);
+      const value: Usage = { wordsUsed: stored.wordsUsed ?? 0, periodStart: stored.periodStart ?? 0 };
+      usageCache = { raw, value: isCurrent(value) ? value : ZERO_USAGE };
     }
     return usageCache.value;
   } catch {
@@ -133,7 +141,10 @@ export function getUsageServerSnapshot(): Usage {
 
 export function addUsage(words: number): Usage {
   const usage = loadUsage();
-  const next: Usage = { wordsUsed: usage.wordsUsed + words, period: currentPeriod() };
+  const next: Usage = {
+    wordsUsed: usage.wordsUsed + words,
+    periodStart: usage.periodStart > 0 ? usage.periodStart : Date.now(),
+  };
   if (typeof window !== "undefined") {
     try {
       window.localStorage.setItem(USAGE_KEY, JSON.stringify(next));

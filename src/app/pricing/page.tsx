@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { FAQ } from "@/components/marketing/FAQ";
-import { Pricing } from "@/components/marketing/Pricing";
+import { Pricing, money } from "@/components/marketing/Pricing";
 import { SectionHeading } from "@/components/marketing/SectionHeading";
-import { PLANS, type PlanId } from "@/lib/site";
+import { BILLING_PERIODS, PLANS, type PlanId } from "@/lib/site";
 import { formatNumber } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ const DETAILS: Record<PlanId, { history: string; api: string; seats: string }> =
   business: { history: "Unlimited", api: "Included", seats: "5" },
 };
 
-const COLUMNS = ["Plan", "Words / month", "Words / request", "History", "API", "Seats"];
+const COLUMNS = ["Plan", ...BILLING_PERIODS.map((b) => b.label), "Per request", "History", "API", "Seats"];
 
 export default function PricingPage() {
   return (
@@ -30,7 +30,7 @@ export default function PricingPage() {
           as="h1"
           eyebrow="Pricing"
           title="Simple plans, honest limits"
-          lede="Detection is free for everyone, with no account. Paid plans raise how many words the humanizer will rewrite each month and per request."
+          lede="Detection is free for everyone, with no account. Paid plans come in 1, 4 or 12 week terms and raise how many words the humanizer will rewrite per term and per request."
         />
       </div>
 
@@ -41,8 +41,8 @@ export default function PricingPage() {
           <h2 id="compare-heading" className="text-center text-xl font-medium tracking-[-0.01em] text-ink">
             Compare plans
           </h2>
-          <div className="card mx-auto mt-8 max-w-4xl overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-sm">
+          <div className="card mx-auto mt-8 max-w-5xl overflow-x-auto">
+            <table className="w-full min-w-[52rem] text-sm">
               <caption className="sr-only">Limits and inclusions by plan</caption>
               <thead>
                 <tr className="border-b border-line">
@@ -65,7 +65,15 @@ export default function PricingPage() {
                       <th scope="row" className="px-5 py-3.5 text-left font-medium text-ink">
                         {plan.name}
                       </th>
-                      <td className="px-5 py-3.5 text-right font-mono text-ink-2">{formatNumber(plan.wordsPerMonth)}</td>
+                      {BILLING_PERIODS.map((b) => {
+                        const tier = plan.prices[b.id];
+                        return (
+                          <td key={b.id} className="px-5 py-3.5 text-right">
+                            <span className="font-mono text-ink">{tier.price === 0 ? "Free" : `$${money(tier.price)}`}</span>
+                            <span className="block text-xs text-faint">{formatNumber(tier.words)} words</span>
+                          </td>
+                        );
+                      })}
                       <td className="px-5 py-3.5 text-right font-mono text-ink-2">{formatNumber(plan.wordsPerRequest)}</td>
                       <td className="px-5 py-3.5 text-right text-ink-2">{d.history}</td>
                       <td className="px-5 py-3.5 text-right text-ink-2">{d.api}</td>
