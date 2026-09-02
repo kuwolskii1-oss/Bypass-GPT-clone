@@ -39,6 +39,10 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 | `PROSELY_CLAUDE_EFFORT` | `low` … `max`, defaults to `medium`. |
 | `PROSELY_MAX_WORDS` | Per-request cap enforced by the API (default 500, hard max 10,000). |
 
+## Standalone page
+
+`npm run build:artifact` bundles the engine into `artifact/prosely.html`, a single self-contained page with the humanizer, detector, breakdown and detector estimates that runs entirely in the browser (no server, no key). `artifact/prosely.template.html` is the page; the script inlines the engine where the `/*__ENGINE__*/` placeholder sits. The built page is committed so it can be published as-is.
+
 ## How the engine works
 
 `src/lib/engine/` is pure TypeScript with no runtime dependencies; it runs in route handlers and in the browser.
