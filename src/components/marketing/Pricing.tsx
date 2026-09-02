@@ -17,16 +17,12 @@ import {
   type PeriodId,
   type Plan,
 } from "@/lib/site";
-import { cn, formatNumber } from "@/lib/utils";
+import { cn, formatNumber, money } from "@/lib/utils";
 
 function ctaHref(plan: Plan): string {
   if (plan.id === "free") return "/humanizer";
   if (plan.id === "business") return `mailto:${SITE.supportEmail}`;
   return "/dashboard";
-}
-
-export function money(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(2);
 }
 
 const PERIOD_OPTIONS = BILLING_PERIODS.map((b) => ({ value: b.id, label: b.label }));

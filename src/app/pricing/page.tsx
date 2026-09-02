@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { CtaBand } from "@/components/marketing/CtaBand";
 import { FAQ } from "@/components/marketing/FAQ";
-import { Pricing, money } from "@/components/marketing/Pricing";
+import { Pricing } from "@/components/marketing/Pricing";
 import { SectionHeading } from "@/components/marketing/SectionHeading";
 import { BILLING_PERIODS, PLANS, type PlanId } from "@/lib/site";
-import { formatNumber } from "@/lib/utils";
+import { formatNumber, money } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Pricing",

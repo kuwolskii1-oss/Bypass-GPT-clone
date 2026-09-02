@@ -16,3 +16,8 @@ export function formatNumber(n: number): string {
 export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
+
+/** Formats a price without trailing ".00" for whole numbers. */
+export function money(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
