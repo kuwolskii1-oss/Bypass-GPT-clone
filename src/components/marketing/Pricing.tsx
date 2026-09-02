@@ -77,9 +77,9 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
                   <span className="text-4xl font-medium tracking-[-0.03em] text-ink">${money(tier.price)}</span>
                   {!free && <span className="text-sm text-muted">/ {term.label}</span>}
                 </div>
-                <p className="mt-1 text-xs text-faint">
+                <p className="mt-1 min-h-10 text-xs leading-5 text-faint">
                   {free
-                    ? "Free forever, no card needed"
+                    ? "No card, no account needed"
                     : term.weeks === 1
                       ? term.billed
                       : `$${perWeek.toFixed(2)} per week · ${term.billed}`}
@@ -87,8 +87,8 @@ export function Pricing({ heading = true }: { heading?: boolean }) {
 
                 <dl className="mt-5 grid grid-cols-2 gap-3 rounded-xl bg-surface p-3">
                   <div>
-                    <dt className="text-[11px] text-faint">
-                      Words / {free ? `${FREE_ALLOWANCE.weeks} weeks` : term.label}
+                    <dt className="whitespace-nowrap text-[11px] text-faint">
+                      {free ? `Words / ${FREE_ALLOWANCE.weeks} weeks` : "Words per term"}
                     </dt>
                     <dd className="mt-0.5 text-sm font-medium text-ink">{formatNumber(tier.words)}</dd>
                   </div>

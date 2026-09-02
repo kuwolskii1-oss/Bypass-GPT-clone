@@ -3,6 +3,7 @@
 import { FileText, ScanSearch, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { VERDICT_SENTENCE } from "@/lib/report";
 import { Button } from "@/components/ui/Button";
 import { Breakdown } from "@/components/workspace/Breakdown";
 import { ControlBar } from "@/components/workspace/ControlBar";
@@ -55,6 +56,7 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
   const usage = useUsage();
   const seedRef = useRef(1);
   const abortRef = useRef<AbortController | null>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
 
   const words = countWords(text);
   const tooShort = words < LIMITS.minWords;
@@ -105,6 +107,11 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
     return controller;
   };
 
+  /** Bring the output into view once a result lands; on phones it sits below the editor. */
+  const reveal = () => {
+    window.requestAnimationFrame(() => outputRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+  };
+
   const fail = (e: unknown) => {
     if (e instanceof DOMException && e.name === "AbortError") return;
     setError(e instanceof ApiRequestError ? e.message : "Something went wrong. Please try again.");
@@ -116,6 +123,7 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
     try {
       const r = await apiDetect(text, controller.signal);
       setDetection(r);
+      reveal();
       addHistoryEntry({
         kind: "detect",
         words,
@@ -140,6 +148,7 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
       setResult(r);
       setDetection(r.before);
       setOutputTab("text");
+      reveal();
       addUsage(words);
       addHistoryEntry({
         kind: "humanize",
@@ -216,11 +225,15 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
             AI Detector
           </ModeTab>
         </div>
-        {shown && !busy && (
-          <Button variant="ghost" size="sm" icon={<FileText className="size-3.5" />} onClick={() => setLayout("report")}>
-            Full report
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Status busy={busy} shown={shown} rewritten={Boolean(result)} />
+          {shown && !busy && (
+            <Button variant="ghost" size="sm" icon={<FileText className="size-3.5" />} onClick={() => setLayout("report")}>
+              <span className="hidden sm:inline">Full report</span>
+              <span className="sm:hidden">Report</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid lg:grid-cols-2 lg:divide-x lg:divide-line">
@@ -232,7 +245,14 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
           disabled={Boolean(busy)}
           embedded={embedded}
         />
-        <div className="flex min-w-0 flex-col border-t border-line lg:border-t-0">
+        <div
+          ref={outputRef}
+          className={cn(
+            "min-w-0 flex-col border-t border-line lg:border-t-0",
+            // The empty pane is only a placeholder; on phones it would push the button a screen down.
+            result || busy || detection ? "flex" : "hidden lg:flex",
+          )}
+        >
           {result ? (
             <OutputPanel
               result={result}
@@ -243,9 +263,18 @@ export function Workspace({ mode: initialMode = "humanize", embedded = false }: 
               embedded={embedded}
             />
           ) : busy ? (
-            <PanelSkeleton embedded={embedded} label={busy === "humanize" ? "Rewriting…" : "Scanning…"} />
+            <PanelSkeleton embedded={embedded} kind={busy} />
           ) : detection ? (
-            <DetectionView text={text} result={detection} embedded={embedded} />
+            <DetectionView
+              text={text}
+              result={detection}
+              embedded={embedded}
+              onHumanize={() => {
+                setMode("humanize");
+                void runHumanize(false);
+              }}
+              humanizeDisabled={!canRun || outOfWords}
+            />
           ) : (
             <EmptyPanel mode={mode} embedded={embedded} />
           )}
@@ -312,7 +341,7 @@ function ModeTab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-medium transition-colors",
         active ? "bg-accent-soft text-accent-strong" : "text-muted hover:bg-surface hover:text-ink",
       )}
     >
@@ -327,7 +356,7 @@ function EmptyPanel({ mode, embedded }: { mode: Mode; embedded: boolean }) {
     <div
       className={cn(
         "flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center",
-        embedded ? "min-h-[240px] sm:min-h-[280px]" : "min-h-[320px] sm:min-h-[380px]",
+        embedded ? "min-h-[220px] sm:min-h-[260px]" : "min-h-[260px] sm:min-h-[300px]",
       )}
     >
       <span className="flex size-11 items-center justify-center rounded-2xl bg-accent-soft text-accent">
@@ -345,11 +374,34 @@ function EmptyPanel({ mode, embedded }: { mode: Mode; embedded: boolean }) {
   );
 }
 
-function PanelSkeleton({ embedded, label }: { embedded: boolean; label: string }) {
+/** A fixed place to read the tool's state, in the header: Ready → Rewriting… → Done. */
+function Status({ busy, shown, rewritten }: { busy: Busy; shown: DetectionResult | null; rewritten: boolean }) {
+  const label = busy === "humanize" ? "Rewriting…" : busy === "detect" ? "Checking…" : shown ? `${rewritten ? "Done" : "Checked"} · ${shown.aiProbability}% AI` : "Ready";
+  const dot = busy ? "bg-mixed animate-pulse-soft" : shown ? { human: "bg-human", mixed: "bg-mixed", ai: "bg-ai" }[shown.verdict] : "bg-human";
+  return (
+    <span className="hidden items-center gap-1.5 text-xs text-muted sm:inline-flex" role="status" aria-live="polite">
+      <span className={cn("size-1.5 rounded-full", dot)} aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+const STAGES: Record<Exclude<Busy, null>, string[]> = {
+  humanize: ["Removing AI-typical phrasing…", "Varying sentence rhythm…", "Scoring the result…"],
+  detect: ["Splitting into sentences…", "Measuring rhythm and phrasing…", "Estimating 12 detectors…"],
+};
+
+function PanelSkeleton({ embedded, kind }: { embedded: boolean; kind: Exclude<Busy, null> }) {
   const widths = ["92%", "100%", "84%", "96%", "72%", "88%", "60%"];
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => setStep((s) => s + 1), 900);
+    return () => window.clearInterval(timer);
+  }, []);
+  const label = STAGES[kind][step % STAGES[kind].length];
   return (
     <div
-      className={cn("flex flex-1 flex-col px-5 py-5", embedded ? "min-h-[240px] sm:min-h-[280px]" : "min-h-[320px] sm:min-h-[380px]")}
+      className={cn("flex flex-1 flex-col px-5 py-5", embedded ? "min-h-[220px] sm:min-h-[260px]" : "min-h-[260px] sm:min-h-[300px]")}
       aria-busy="true"
       aria-live="polite"
     >
@@ -377,7 +429,19 @@ function BreakdownSkeleton() {
   );
 }
 
-function DetectionView({ text, result, embedded }: { text: string; result: DetectionResult; embedded: boolean }) {
+function DetectionView({
+  text,
+  result,
+  embedded,
+  onHumanize,
+  humanizeDisabled,
+}: {
+  text: string;
+  result: DetectionResult;
+  embedded: boolean;
+  onHumanize: () => void;
+  humanizeDisabled: boolean;
+}) {
   const [showLow, setShowLow] = useState(false);
   const lowRange = result.aiProbability > 0 && result.aiProbability < 20;
   return (
@@ -401,10 +465,18 @@ function DetectionView({ text, result, embedded }: { text: string; result: Detec
       <div
         className={cn(
           "quiet-scroll flex-1 overflow-auto px-5 py-4",
-          embedded ? "max-h-[320px] min-h-[240px] sm:min-h-[280px]" : "max-h-[520px] min-h-[320px] sm:min-h-[380px]",
+          embedded ? "max-h-[320px] min-h-[220px] sm:min-h-[260px]" : "max-h-[520px] min-h-[260px] sm:min-h-[300px]",
         )}
       >
         <HighlightedText text={text} result={result} showLowConfidence={showLow} />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-2.5">
+        <p className="text-xs text-ink-2">{VERDICT_SENTENCE[result.verdict]}</p>
+        {result.verdict !== "human" && (
+          <Button variant="soft" size="sm" icon={<Sparkles className="size-3.5" />} onClick={onHumanize} disabled={humanizeDisabled}>
+            Humanize this text
+          </Button>
+        )}
       </div>
     </div>
   );

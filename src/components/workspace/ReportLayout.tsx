@@ -9,7 +9,7 @@ import { DetectorPanel } from "@/components/workspace/DetectorPanel";
 import { HighlightedText } from "@/components/workspace/HighlightedText";
 import { VERDICT_TEXT_CLASS } from "@/components/workspace/ScoreGauge";
 import type { DetectionResult } from "@/lib/engine/types";
-import { buildReportHtml, downloadTextFile, VERDICT_TEXT, scoreNote } from "@/lib/report";
+import { CONFIDENCE_TEXT, VERDICT_TEXT, buildReportHtml, downloadTextFile, scoreNote } from "@/lib/report";
 import { cn } from "@/lib/utils";
 
 export function ReportLayout({
@@ -30,6 +30,7 @@ export function ReportLayout({
   const lowRange = result.aiProbability > 0 && result.aiProbability < 20;
   const note = scoreNote(result.aiProbability, result.tooShort);
   const picked = selected != null ? result.sentences.find((s) => s.index === selected) : undefined;
+  const [generated] = useState(() => new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" }));
 
   return (
     <div className={cn("flex flex-col", className)}>
@@ -63,8 +64,15 @@ export function ReportLayout({
       </div>
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
-        <div className="quiet-scroll max-h-[70vh] overflow-auto border-b border-line p-5 sm:p-8 lg:border-b-0 lg:border-r">
+        <div className="quiet-scroll max-h-[75vh] overflow-auto border-b border-line p-5 sm:p-8 lg:border-b-0 lg:border-r">
           <div className="mx-auto max-w-2xl">
+            <div className="mb-6 border-b border-line pb-4">
+              <h2 className="text-lg font-medium tracking-[-0.01em] text-ink">{title}</h2>
+              <p className="mt-1 text-xs text-muted">
+                {generated} · {result.metrics.words.toLocaleString("en-US")} words · {result.metrics.sentences}{" "}
+                {result.metrics.sentences === 1 ? "sentence" : "sentences"} scored
+              </p>
+            </div>
             <HighlightedText
               text={text}
               result={result}
@@ -75,7 +83,7 @@ export function ReportLayout({
           </div>
         </div>
 
-        <aside className="quiet-scroll max-h-[70vh] overflow-auto bg-surface/60 p-5 sm:p-6">
+        <aside className="bg-surface/60 p-5 sm:p-6">
           <h3 className="text-[11px] font-medium uppercase tracking-[0.12em] text-faint">Submission breakdown</h3>
           <div className="mt-3 flex items-baseline gap-2">
             <span className={cn("text-5xl font-semibold tracking-[-0.04em]", VERDICT_TEXT_CLASS[result.verdict])}>
@@ -85,12 +93,15 @@ export function ReportLayout({
               <span className="text-sm text-muted">{result.aiProbability}%</span>
             )}
           </div>
-          <p className="mt-1 text-sm text-ink-2">
-            {result.tooShort ? "Score unavailable" : `of qualifying text is likely AI-generated · ${VERDICT_TEXT[result.verdict]}`}
-          </p>
+          <p className="mt-1 text-sm text-ink-2">{result.tooShort ? "Score unavailable" : "of qualifying text is likely AI-generated"}</p>
           {note && <p className="mt-2 text-xs leading-5 text-muted">{note}</p>}
-          <div className="mt-2">
-            <Badge tone="outline">confidence {result.confidence}</Badge>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {!result.tooShort && (
+              <Badge tone={result.verdict === "ai" ? "ai" : result.verdict === "mixed" ? "mixed" : "human"} dot>
+                {VERDICT_TEXT[result.verdict]}
+              </Badge>
+            )}
+            <Badge tone="outline">{CONFIDENCE_TEXT[result.confidence]}</Badge>
           </div>
 
           <SegmentBar result={result} className="mt-5" />

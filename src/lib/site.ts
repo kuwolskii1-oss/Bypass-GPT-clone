@@ -200,6 +200,10 @@ export const FAQS = [
     a: "Yes. Detection is free and unlimited, and you get 1,500 humanizer words every 4 weeks without a card. Paid plans come in 1-week, 4-week and 12-week terms and raise both the period and per-request limits.",
   },
   {
+    q: "What does \"per request\" mean?",
+    a: "Per request is the most words you can paste into one humanize run. The term allowance is the total across every run in that 1, 4 or 12 week term. Detection has no per-request cap beyond your plan's word limit.",
+  },
+  {
     q: "Which languages do you support?",
     a: "The detector and humanizer are tuned for English. Other Latin-script languages will get a score, but treat it as low confidence.",
   },

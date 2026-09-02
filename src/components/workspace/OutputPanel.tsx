@@ -49,6 +49,13 @@ export function OutputPanel({
   };
 
   const drop = result.before.aiProbability - result.after.aiProbability;
+  const verdict = result.after.verdict;
+  const nextStep =
+    verdict === "human"
+      ? "Reads as human-written. Copy it, or re-humanize for another take."
+      : result.options.strength !== "aggressive"
+        ? "Still has AI signals. Try Aggressive strength or re-humanize."
+        : "Still has AI signals. Re-humanize for a new variant, or edit the amber sentences in Highlights.";
 
   return (
     <div className={cn("flex min-w-0 flex-col", className)}>
@@ -95,15 +102,32 @@ export function OutputPanel({
       <div
         className={cn(
           "quiet-scroll flex-1 overflow-auto px-5 py-4",
-          embedded ? "max-h-[320px] min-h-[240px] sm:min-h-[280px]" : "max-h-[520px] min-h-[320px] sm:min-h-[380px]",
+          embedded ? "max-h-[320px] min-h-[220px] sm:min-h-[260px]" : "max-h-[520px] min-h-[260px] sm:min-h-[300px]",
         )}
       >
         {tab === "text" && (
           <div className="whitespace-pre-wrap text-[15px] leading-7 text-ink">{result.text}</div>
         )}
-        {tab === "highlights" && <HighlightedText text={result.text} result={result.after} showLowConfidence />}
+        {tab === "highlights" && (
+          <>
+            <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-sm bg-ai/40" aria-hidden /> Reads as AI
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="size-2 rounded-sm bg-mixed/50" aria-hidden /> Mixed
+              </span>
+              <span>Plain text reads as human</span>
+            </p>
+            <HighlightedText text={result.text} result={result.after} showLowConfidence />
+          </>
+        )}
         {tab === "compare" && (
           <div className="whitespace-pre-wrap text-[15px] leading-7 text-ink">
+            <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
+              <span className="rounded-[3px] bg-human-soft px-1 text-human">added</span>
+              <span className="rounded-[3px] bg-ai-soft px-1 text-ai/80 line-through">removed</span>
+            </p>
             {diff.map((op, i) =>
               op.type === "equal" ? (
                 <span key={i}>{op.text}</span>
@@ -121,14 +145,16 @@ export function OutputPanel({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Badge tone={result.after.verdict === "human" ? "human" : result.after.verdict === "mixed" ? "mixed" : "ai"} dot>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line px-4 py-2.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
+          <Badge tone={verdict === "human" ? "human" : verdict === "mixed" ? "mixed" : "ai"} dot>
             {result.after.aiProbability}% AI
           </Badge>
-          {drop > 0 && <Badge tone="neutral">−{drop} pts</Badge>}
-          <Badge tone="neutral">{result.edits} edits</Badge>
-          <Badge tone="outline">{result.engine === "claude" ? "Claude" : "Local engine"}</Badge>
+          <span className="text-xs text-muted">
+            {drop > 0 ? `down from ${result.before.aiProbability}%` : `was ${result.before.aiProbability}%`} · {result.edits} words changed
+            {result.engine === "claude" ? " · rewritten with Claude" : ""}
+          </span>
+          <span className="basis-full text-xs text-ink-2">{nextStep}</span>
         </div>
         <Button variant="ghost" size="sm" onClick={onRehumanize} loading={busy} icon={<RefreshCw className="size-3.5" />}>
           Re-humanize

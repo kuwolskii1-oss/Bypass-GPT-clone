@@ -18,16 +18,17 @@ const LEGEND = [
 export default function DetectorPage() {
   return (
     <>
-      <section className="relative overflow-hidden pb-16 pt-14 sm:pt-20">
+      <section className="relative overflow-hidden pb-14 pt-10 sm:pt-14">
         <div className="dot-grid pointer-events-none absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
         <div className="wrap">
           <SectionHeading
             as="h1"
+            size="section"
             eyebrow="AI detector"
             title="See exactly which sentences give it away"
             lede="Free and unlimited. Paste at least 30 words for a score, 300 for the long-form estimates, and click any highlighted sentence to see why it was flagged."
           />
-          <div className="mt-10">
+          <div className="mt-8">
             <Workspace mode="detect" />
           </div>
         </div>
@@ -46,8 +47,9 @@ export default function DetectorPage() {
               sentences by default in that range.
             </p>
             <p className="mt-4 text-sm leading-6 text-muted">
-              The model can misidentify both human-written and AI-generated text. Use the report to decide what to
-              revise, not to make decisions about a person.
+              The model can misidentify both human-written and AI-generated text. Repetitive or formulaic human
+              writing, and text paraphrased without adding new ideas, can read as AI; in short texts the score tends to
+              be all or nothing. Use the report to decide what to revise, not to make decisions about a person.
             </p>
           </div>
           <div className="card divide-y divide-line">

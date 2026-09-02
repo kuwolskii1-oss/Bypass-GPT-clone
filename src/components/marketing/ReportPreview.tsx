@@ -8,9 +8,9 @@ const POINTS = [
 ];
 
 const LEGEND = [
-  { label: "Likely AI", pct: "22%", color: "bg-ai" },
-  { label: "Mixed", pct: "12%", color: "bg-mixed" },
-  { label: "Likely human", pct: "66%", color: "bg-human" },
+  { label: "AI-generated", pct: "22%", color: "bg-ai" },
+  { label: "Mixed or AI-paraphrased", pct: "12%", color: "bg-mixed" },
+  { label: "Human-like", pct: "66%", color: "bg-human" },
 ];
 
 export function ReportPreview() {

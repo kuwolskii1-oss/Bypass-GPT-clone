@@ -79,7 +79,7 @@ export function Editor({
         aria-label="Text to analyze"
         className={cn(
           "quiet-scroll w-full flex-1 bg-transparent px-5 py-4 text-[15px] leading-7 text-ink placeholder:text-faint focus:outline-none",
-          embedded ? "min-h-[240px] sm:min-h-[280px]" : "min-h-[320px] sm:min-h-[380px]",
+          embedded ? "min-h-[220px] sm:min-h-[260px]" : "min-h-[260px] sm:min-h-[300px]",
         )}
       />
 

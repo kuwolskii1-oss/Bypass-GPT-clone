@@ -22,17 +22,19 @@ function UsageRing({ used, total }: { used: number; total: number }) {
     <div className="relative shrink-0" style={{ width: size, height: size }} role="img" aria-label={`${Math.round(pct)}% of words used`}>
       <svg viewBox={`0 0 ${size} ${size}`} className="size-full -rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-line)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="var(--color-accent)"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${(pct / 100) * c} ${c}`}
-          className="transition-[stroke-dasharray] duration-700"
-        />
+        {pct > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="var(--color-accent)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${(pct / 100) * c} ${c}`}
+            className="transition-[stroke-dasharray] duration-700"
+          />
+        )}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center text-lg font-semibold tracking-tight text-ink">
         {Math.round(pct)}%
@@ -106,8 +108,12 @@ export function Dashboard() {
             </Button>
           </div>
         </div>
-        <Stat label="Documents processed" value={ready ? formatNumber(history.length) : "—"} />
-        <Stat label="Average AI score drop" value={ready ? (humanized.length ? `−${avgDrop} pts` : "—") : "—"} hint="across humanized documents" />
+        <Stat label="Documents processed" value={ready ? formatNumber(history.length) : "—"} hint="checks and rewrites in this browser" />
+        <Stat
+          label="Average AI score drop"
+          value={ready ? (humanized.length ? `−${avgDrop} pts` : "0 pts") : "—"}
+          hint={humanized.length ? "across humanized documents" : "humanize a draft to see this"}
+        />
       </div>
 
       <div className="mt-10 flex items-center justify-between">

@@ -10,7 +10,7 @@ const DOT: Record<Verdict, string> = {
 
 const LABEL: Record<Verdict, string> = {
   human: "Human",
-  mixed: "Unclear",
+  mixed: "Mixed",
   ai: "AI",
 };
 
@@ -44,7 +44,7 @@ export function DetectorPanel({
           those services. Re-check with the detector your reader uses.
         </Hint>
       </div>
-      <ul className={cn("grid gap-x-6", dense ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
+      <ul className={cn("grid gap-x-8", dense ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2")}>
         {rows.map((d, i) => {
           const unavailable = Boolean(d.unavailable);
           return (
@@ -59,7 +59,9 @@ export function DetectorPanel({
                   style={pending ? { animationDelay: `${i * 90}ms` } : undefined}
                   aria-hidden
                 />
-                <span className={cn("truncate", idle ? "text-faint" : "text-ink")}>{d.name}</span>
+                <span className={cn("truncate", idle ? "text-faint" : "text-ink")} title={d.name}>
+                  {d.name}
+                </span>
               </span>
               <span className="shrink-0 text-right text-xs">
                 {pending ? (
@@ -70,7 +72,7 @@ export function DetectorPanel({
                   <span className="text-faint">{d.note || "Unavailable"}</span>
                 ) : (
                   <>
-                    <span className="mr-2 tabular-nums text-muted">{d.aiScore}% AI</span>
+                    <span className="mr-1.5 tabular-nums text-muted">{d.aiScore}%</span>
                     <span className={cn("font-medium", LABEL_CLASS[d.verdict])}>{LABEL[d.verdict]}</span>
                   </>
                 )}

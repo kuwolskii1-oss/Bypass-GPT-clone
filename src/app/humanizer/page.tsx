@@ -31,16 +31,17 @@ const TIPS = [
 export default function HumanizerPage() {
   return (
     <>
-      <section className="relative overflow-hidden pb-16 pt-14 sm:pt-20">
+      <section className="relative overflow-hidden pb-14 pt-10 sm:pt-14">
         <div className="dot-grid pointer-events-none absolute inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_top,black,transparent_70%)]" />
         <div className="wrap">
           <SectionHeading
             as="h1"
+            size="section"
             eyebrow="AI humanizer"
             title="Make AI-assisted writing sound like you"
             lede="Paste a draft, choose how it should read, and get a rewrite that keeps your meaning. Every result is scored before you copy it."
           />
-          <div className="mt-10">
+          <div className="mt-8">
             <Workspace mode="humanize" />
           </div>
         </div>

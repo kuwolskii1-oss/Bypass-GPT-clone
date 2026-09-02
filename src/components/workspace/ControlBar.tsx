@@ -47,7 +47,7 @@ export function ControlBar({
           options={readabilityOptions}
           onChange={(readability) => onChange({ ...options, readability })}
           disabled={disabled}
-          className="w-[10.5rem]"
+          className="w-[calc(50%-0.5rem)] sm:w-[10.5rem]"
         />
         <Select
           label="Purpose"
@@ -55,7 +55,7 @@ export function ControlBar({
           options={purposeOptions}
           onChange={(purpose) => onChange({ ...options, purpose })}
           disabled={disabled}
-          className="w-[10.5rem]"
+          className="w-[calc(50%-0.5rem)] sm:w-[10.5rem]"
         />
         <Segmented
           label="Strength"
