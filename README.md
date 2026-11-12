@@ -67,7 +67,7 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 | AUROC, tuning set | 0.86 | 0.99 |
 | Held-out set (4 AI, 4 human) | not measured | no AI called human, no human called AI; AUROC 0.94 |
 
-Mean score after humanizing the AI texts: Light 55, Balanced 36, Aggressive 32 (from a mean of 82). Promotional copy and cliche-dense essays stay "mixed" with the rule engine; the Claude engine rewrites more deeply.
+Mean score after humanizing the 25 AI texts: Light 55, Balanced 39, Aggressive 34 (from a mean of 80). Promotional copy and cliche-dense essays stay "mixed" with the rule engine; the Claude engine rewrites more deeply.
 
 Limits worth knowing: this is a stylometric detector, not a language-model one. It has no perplexity signal, so carefully edited model text and unusual human prose both land in the middle band, and the benchmark is small. The numbers above describe this corpus, not accuracy in the wild.
 
