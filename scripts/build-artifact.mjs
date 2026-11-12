@@ -1,5 +1,6 @@
 // Builds the standalone Prosely page (artifact/prosely.html): the engine bundled
 // into a single script and inlined into artifact/prosely.template.html.
+// pdf.js stays external: the page loads it from cdnjs through setPdfJsLoader.
 // Usage: npm run build:artifact
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -13,11 +14,11 @@ const bundle = join(tmp, "engine.iife.js");
 
 writeFileSync(
   entry,
-  `export * from "${join(root, "src/lib/engine/index")}";\nexport { diffWords } from "${join(root, "src/lib/diff")}";\n`,
+  `export * from "${join(root, "src/lib/engine/index")}";\nexport { diffWords } from "${join(root, "src/lib/diff")}";\nexport { ACCEPT_ATTRIBUTE, DocumentError, extractDocumentText, setPdfJsLoader } from "${join(root, "src/lib/documents")}";\n`,
 );
 execFileSync(
   "npx",
-  ["--yes", "esbuild@0.25.9", entry, "--bundle", "--format=iife", "--global-name=Prosely", "--minify", "--target=es2020", `--outfile=${bundle}`],
+  ["--yes", "esbuild@0.25.9", entry, "--bundle", "--format=iife", "--global-name=Prosely", "--minify", "--target=es2020", "--external:pdfjs-dist", `--outfile=${bundle}`],
   { stdio: "inherit", cwd: root },
 );
 

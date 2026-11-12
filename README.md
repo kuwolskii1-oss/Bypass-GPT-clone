@@ -42,7 +42,7 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 
 ## Standalone page
 
-`npm run build:artifact` bundles the engine into `artifact/prosely.html`, a single self-contained page with the humanizer, detector, breakdown and detector estimates that runs entirely in the browser (no server, no key). `artifact/prosely.template.html` is the page; the script inlines the engine where the `/*__ENGINE__*/` placeholder sits. The built page is committed so it can be published as-is.
+`npm run build:artifact` bundles the engine into `artifact/prosely.html`, a single self-contained page with the humanizer, detector, breakdown, detector estimates and document upload (drag-and-drop or Upload file; PDF text comes from pdf.js 5.4.296 on cdnjs) that runs entirely in the browser (no server, no key). `artifact/prosely.template.html` is the page; the script inlines the engine where the `/*__ENGINE__*/` placeholder sits. The built page is committed so it can be published as-is.
 
 ## How the engine works
 

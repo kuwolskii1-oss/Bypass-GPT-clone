@@ -177,11 +177,23 @@ interface PdfTextItem {
   transform?: number[];
 }
 
-async function pdfToText(data: Uint8Array): Promise<string> {
+type PdfJs = typeof import("pdfjs-dist");
+
+let loadPdfJs: () => Promise<PdfJs> = async () => {
   const pdfjs = await import("pdfjs-dist");
   if (!pdfjs.GlobalWorkerOptions.workerSrc) {
     pdfjs.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
   }
+  return pdfjs;
+};
+
+/** Swaps how pdf.js is loaded; the standalone page uses this to load it from a CDN. */
+export function setPdfJsLoader(loader: () => Promise<PdfJs>): void {
+  loadPdfJs = loader;
+}
+
+async function pdfToText(data: Uint8Array): Promise<string> {
+  const pdfjs = await loadPdfJs();
   let doc;
   try {
     doc = await pdfjs.getDocument({ data }).promise;

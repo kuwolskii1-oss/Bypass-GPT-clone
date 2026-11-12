@@ -135,7 +135,21 @@
   /* Panes */
   .panes { display: grid; grid-template-columns: 1fr; }
   @media (min-width: 900px) { .panes { grid-template-columns: 1fr 1fr; } .pane + .pane { border-left: 1px solid var(--line); border-top: 0; } }
-  .pane { display: flex; flex-direction: column; min-width: 0; }
+  .pane { position: relative; display: flex; flex-direction: column; min-width: 0; }
+  .dropzone {
+    position: absolute; inset: 8px; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    border: 2px dashed var(--accent); border-radius: 12px; background: var(--accent-soft); text-align: center; pointer-events: none;
+  }
+  .dropzone.show { display: flex; }
+  .dropzone.reading { border-color: var(--line-strong); background: var(--canvas); }
+  .dropzone strong { font-size: 14px; font-weight: 500; color: var(--accent-strong); }
+  .dropzone.reading strong { color: var(--ink); }
+  .dropzone span { font-size: 12px; color: var(--muted); }
+  .file-note { display: none; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .file-note.show { display: flex; }
+  .file-note.error { background: var(--ai-soft); color: var(--ai); }
+  .file-note button { border: 0; background: transparent; padding: 0 2px; color: inherit; opacity: .7; }
+  .file-note button:hover { opacity: 1; }
   .pane + .pane { border-top: 1px solid var(--line); }
   .pane.hidden-idle { display: none; }
   @media (min-width: 900px) { .pane.hidden-idle { display: flex; } }
@@ -333,7 +347,14 @@
 
     <div class="panes">
       <section class="pane" aria-label="Your text">
-        <textarea id="editor" placeholder="Paste or type your text here…" spellcheck="false" aria-label="Text to analyze"></textarea>
+        <textarea id="editor" placeholder="Paste or type your text here, or drop a .docx, .pdf, .txt or .md file…" spellcheck="false" aria-label="Text to analyze"></textarea>
+        <div class="dropzone" id="dropzone" role="status" aria-live="polite">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M12 18v-6M9 15l3-3 3 3"/></svg>
+          <strong id="dropTitle">Drop your document to load it</strong>
+          <span id="dropSub">.docx, .pdf, .txt or .md · up to 10 MB</span>
+        </div>
+        <p class="file-note" id="fileNote"><span id="fileNoteText"></span><button type="button" id="fileNoteClose" aria-label="Dismiss">✕</button></p>
+        <input type="file" id="fileInput" hidden aria-label="Upload a document">
         <div class="pane-foot">
           <div class="counter">
             <span class="meter" aria-hidden="true"><span id="meter"></span></span>
@@ -343,6 +364,7 @@
             <select class="select-quiet" id="sample" aria-label="Load a sample text">
               <option value="">Try a sample</option>
             </select>
+            <button class="link-btn" id="upload" type="button">Upload file</button>
             <button class="link-btn" id="clear" type="button">Clear</button>
           </div>
         </div>
@@ -667,7 +689,62 @@
   }
 
   // ---------- events ----------
-  $("editor").addEventListener("input", (e) => { state.text = e.target.value; if (state.detection || state.result) clearResults(); render(); });
+  $("editor").addEventListener("input", (e) => { if ($("fileNote").classList.contains("show")) setNote(null, ""); state.text = e.target.value; if (state.detection || state.result) clearResults(); render(); });
+  // ---------- document upload + drag and drop ----------
+  P.setPdfJsLoader(async () => {
+    const base = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.4.296/";
+    const pdfjs = await import(base + "pdf.min.mjs");
+    pdfjs.GlobalWorkerOptions.workerSrc = base + "pdf.worker.min.mjs";
+    return pdfjs;
+  });
+  $("fileInput").setAttribute("accept", P.ACCEPT_ATTRIBUTE);
+  let dragDepth = 0;
+  let reading = false;
+  function setNote(tone, text) {
+    const n = $("fileNote");
+    n.classList.toggle("show", Boolean(text));
+    n.classList.toggle("error", tone === "error");
+    n.setAttribute("role", tone === "error" ? "alert" : "status");
+    $("fileNoteText").textContent = text || "";
+  }
+  function showDrop(mode, name) {
+    const z = $("dropzone");
+    z.classList.toggle("show", mode !== "off");
+    z.classList.toggle("reading", mode === "reading");
+    $("dropTitle").textContent = mode === "reading" ? `Reading ${name}…` : "Drop your document to load it";
+    $("dropSub").textContent = mode === "reading" ? "Extracting the text in your browser" : ".docx, .pdf, .txt or .md · up to 10 MB";
+  }
+  async function loadFile(file, extra) {
+    if (reading || state.busy) return;
+    reading = true; setNote(null, ""); showDrop("reading", file.name);
+    try {
+      const doc = await P.extractDocumentText(file);
+      $("editor").value = doc.text; state.text = doc.text; $("sample").value = ""; clearResults(); render();
+      setNote("ok", `Loaded ${doc.name} · ${fmt(P.countWords(doc.text))} words${extra || ""}`);
+    } catch (err) {
+      setNote("error", err instanceof P.DocumentError ? err.message : `${file.name} couldn't be read. Paste the text instead.`);
+    } finally {
+      reading = false; showDrop("off");
+    }
+  }
+  const hasFiles = (e) => Array.from(e.dataTransfer ? e.dataTransfer.types : []).includes("Files");
+  const editorPane = $("editor").closest(".pane");
+  editorPane.addEventListener("dragenter", (e) => { if (!hasFiles(e) || reading) return; e.preventDefault(); dragDepth++; showDrop("drag"); });
+  editorPane.addEventListener("dragover", (e) => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  editorPane.addEventListener("dragleave", (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (dragDepth === 0 && !reading) showDrop("off"); });
+  editorPane.addEventListener("drop", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); dragDepth = 0; if (!reading) showDrop("off");
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) loadFile(files[0], files.length > 1 ? " · only the first file was used" : "");
+  });
+  // A file dropped outside the editor would otherwise make the browser navigate away.
+  window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("drop", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  $("upload").addEventListener("click", () => $("fileInput").click());
+  $("fileInput").addEventListener("change", (e) => { const f = e.target.files[0]; e.target.value = ""; if (f) loadFile(f); });
+  $("fileNoteClose").addEventListener("click", () => setNote(null, ""));
+
   $("clear").addEventListener("click", () => { $("editor").value = ""; state.text = ""; clearResults(); $("sample").value = ""; render(); $("editor").focus(); });
   $("sample").addEventListener("change", (e) => {
     const s = P.SAMPLES.find((x) => x.id === e.target.value); if (!s) return;
