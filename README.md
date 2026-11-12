@@ -30,13 +30,13 @@ npm run typecheck            # tsc --noEmit
 
 ## Optional: rewrite with Claude
 
-The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API_KEY` (see `.env.example`) and the `/api/humanize` route rewrites with Claude instead, falling back to the local engine on any error or refusal. Detection is always local so results are deterministic and free.
+The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API_KEY` (see `.env.example`) and the `/api/humanize` route rewrites with Claude instead, falling back to the local engine on any error or refusal. The Claude rewrite is detector-guided: the first pass is scored locally, and sentences that still read as machine-written are sent back once with the reasons ("Contrast framing", "Trailing -ing clause"); the revision is kept only if it scores better. Detection is always local so results are deterministic and free.
 
 | Variable | Purpose |
 | --- | --- |
 | `ANTHROPIC_API_KEY` | Enables the Claude engine. |
 | `PROSELY_ENGINE` | `claude` or `local` to force an engine. |
-| `PROSELY_CLAUDE_MODEL` | Defaults to `claude-opus-5`. |
+| `PROSELY_CLAUDE_MODEL` | Defaults to `claude-opus-5-5`. |
 | `PROSELY_CLAUDE_EFFORT` | `low` … `max`, defaults to `medium`. |
 | `PROSELY_MAX_WORDS` | Per-request cap enforced by the API (default 500, hard max 10,000). |
 
@@ -49,15 +49,27 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 `src/lib/engine/` is pure TypeScript with no runtime dependencies; it runs in route handlers and in the browser.
 
 - `text.ts` — sentence splitter with character offsets, tokenizer, syllables and Flesch-Kincaid grade, hidden-character scan, seeded PRNG.
-- `lexicon.ts` — 300+ LLM tell-phrases with plainer replacements, transitional openers, contraction rules, intensifiers, formal→plain simplifications, casual markers.
-- `detect.ts` — combines burstiness (sentence-length variation), transition rate, phrase density, contractions, first person, casual markers, questions and asides, word length, list patterns and paragraph uniformity into a document logit, then blends it with per-sentence evidence for highlights.
+- `lexicon.ts` — 380+ tell-phrases with plainer replacements, transitional openers graded by how formulaic they are, contraction rules, intensifiers, formal→plain simplifications, casual markers.
+- `style.ts` — the structural signals of current model prose: contrast framing ("not X but Y", "It isn't X. It's Y."), participial tails (", highlighting…"), signpost sentences, em-dash asides, paired abstractions, markdown scaffolding with bold-label bullets. Also masks citations, quotations and markdown markers so they are not counted as the author's voice.
+- `detect.ts` — combines rhythm, graded transitions, phrase density and the structural signals with human signals (contractions, first person in a relaxed register, casual markers, asides, numbers) into a document logit, blends it with per-sentence evidence, and pulls short or mostly-quoted texts toward the middle instead of reporting false precision. Each flagged sentence names its signal.
 - `detectors.ts` — re-weights the same evidence per detector profile with a small deterministic jitter.
-- `humanize.ts` — protects keywords/URLs/code, replaces phrases and openers, applies contractions at a register-dependent rate, drops intensifiers, simplifies vocabulary, splits long sentences and merges neighbours (folding "So," / "Still," into clauses) so rhythm varies, fixes articles and capitalisation, and re-scores.
-- `samples.ts` — the three "Try a sample" texts used for calibration tests.
+- `humanize.ts` — a three-step ladder. **Light** swaps tells and formulaic openers. **Balanced** adds structural rewrites (contrast framing → "Y rather than X", em-dash asides, participial tails → their own sentence, concessive openers), contractions, sentence splitting and joining. **Aggressive** applies every rewrite, simplifies vocabulary, regroups lists of three, drops rhetorical lead-ins and bold list labels, and tries more candidates. The lowest-scoring of 3 / 5 / 8 candidates is returned.
+- `samples.ts` — the three "Try a sample" texts.
 
-Rewrites go through the sentence-initial transition rules before phrase replacement (so "Furthermore, X" becomes "Also, X" and never "And, X"), split long sentences at the most uneven natural break, never re-join a sentence they just split, and skip chatty alternatives ("Plus,", "folks") when the purpose is an essay, report, business, legal or cover-letter piece or readability is Doctorate.
+### How good is it?
 
-Calibration on the bundled samples: the AI-style essay scores 100, the human blog post 0, the mixed draft 54. Aggressive humanizing takes the essay from 100 to the mid 40s (mixed) with the local engine; the Claude engine rewrites more deeply. For texts up to 3,000 words the local engine generates five candidate rewrites and returns the one our detector scores lowest, so results are stable across seeds. Ten ChatGPT-style fixtures in `src/lib/engine/__tests__/fixtures.ts` guard against awkward rewrites (agreement after a split `which` clause, inverted `not only`, statements joined onto instructions, register slips in essays).
+`src/lib/engine/__tests__/corpus.ts` is a labelled benchmark: 14 AI texts in the styles current assistants produce, and 19 human texts (public-domain prose by Darwin, Thoreau, Twain, Hamilton, Austen, Lincoln and Melville, plus informal modern writing drafted as style controls). Eight of them are a held-out set written after the weights were frozen.
+
+| | Before this rewrite | Now |
+| --- | --- | --- |
+| AI texts scored "human" (tuning set + fixtures, 21) | 8 | 0 |
+| Human texts scored "AI" (15) | 1 | 0 |
+| AUROC, tuning set | 0.86 | 0.99 |
+| Held-out set (4 AI, 4 human) | not measured | no AI called human, no human called AI; AUROC 0.94 |
+
+Mean score after humanizing the AI texts: Light 55, Balanced 36, Aggressive 32 (from a mean of 82). Promotional copy and cliche-dense essays stay "mixed" with the rule engine; the Claude engine rewrites more deeply.
+
+Limits worth knowing: this is a stylometric detector, not a language-model one. It has no perplexity signal, so carefully edited model text and unusual human prose both land in the middle band, and the benchmark is small. The numbers above describe this corpus, not accuracy in the wild.
 
 ## Project layout
 

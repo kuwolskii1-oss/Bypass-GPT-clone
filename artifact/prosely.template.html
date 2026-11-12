@@ -293,6 +293,8 @@
   @media (min-width: 640px) { .metrics { grid-template-columns: repeat(5, 1fr); } }
   .metrics dt { color: var(--faint); text-decoration: underline dotted var(--line-strong); text-underline-offset: 3px; cursor: help; }
   .metrics dd { margin: 2px 0 0; font-weight: 500; color: var(--ink); }
+  .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips li { border: 1px solid var(--line); background: var(--canvas); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--ink-2); cursor: help; }
   .flags { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--muted); }
   .flags ul { margin: 4px 0 0; padding-left: 16px; color: var(--ink-2); }
   .section-label { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; font-size: 11px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
@@ -602,6 +604,8 @@
       ["Vocabulary", `${Math.round(m.lexicalDiversity * 100)}%`, "Share of distinct words in a 50-word window"],
       ["Reading grade", m.readingGrade.toFixed(1), "Flesch-Kincaid grade level"],
     ];
+    const sig = shown.tooShort ? [] : P.styleSignals(m);
+    const signalsHtml = sig.length ? `<div><p class="section-label" style="margin-bottom:8px">What stands out</p><ul class="chips">${sig.map((x) => `<li title="${esc(x.detail)}">${esc(x.label)}</li>`).join("")}</ul></div>` : "";
     const rows = shown.detectors.map((d) => {
       const na = Boolean(d.unavailable);
       return `<li><span><span class="dot ${na ? "" : d.verdict}"></span><span class="name" title="${esc(d.name)}">${esc(d.name)}</span></span>
@@ -623,6 +627,7 @@
             </ul>
           </div>
         </div>
+        ${signalsHtml}
         <dl class="metrics">${metrics.map(([k, v, t]) => `<div title="${esc(t)}"><dt>${k}</dt><dd class="num">${v}</dd></div>`).join("")}</dl>
         ${flags.length === 0
           ? `<p class="flags">${ICON_FLAG} No hidden characters, look-alike letters or odd spacing found.</p>`

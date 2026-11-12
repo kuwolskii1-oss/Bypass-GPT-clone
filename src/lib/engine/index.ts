@@ -13,3 +13,4 @@ export {
   type TextSpan,
   type HiddenCharacterReport,
 } from "./text";
+export { styleSignals, type StyleSignal } from "./style";

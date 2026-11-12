@@ -24,6 +24,7 @@ import {
   tokenizeWords,
   type Rng,
 } from "./text";
+import { isSignpost, participialTail } from "./style";
 import type { PhraseWeight } from "./lexicon";
 import type { DetectionResult, HumanizeOptions, HumanizeResult, Strength } from "./types";
 
@@ -40,20 +41,31 @@ interface Profile {
   notOnly: boolean;
   /** Skip chatty alternatives ("Plus,", "folks") in formal registers. */
   formal: boolean;
+  /** Probability of each structural rewrite (contrast framing, participial tails, concessive openers). 0 = off. */
+  restructure: number;
+  /** Rewrite em-dash asides as commas or separate sentences. */
+  dashes: boolean;
+  /** Deep-rewrite extras: drop rhetorical lead-ins and bold list labels. */
+  deep: boolean;
 }
 
 const THRESHOLD: Record<Strength, PhraseWeight> = { light: 2, balanced: 1, aggressive: 1 };
-const SPLIT_AT: Record<Strength, number> = { light: 0, balanced: 26, aggressive: 22 };
+const SPLIT_AT: Record<Strength, number> = { light: 0, balanced: 26, aggressive: 19 };
 const VARY_CHANCE: Record<Strength, number> = { light: 0, balanced: 0.35, aggressive: 0.6 };
+const RESTRUCTURE: Record<Strength, number> = { light: 0, balanced: 0.55, aggressive: 1 };
+/** Candidate rewrites generated per strength; the lowest-scoring one is returned. */
+const BEST_OF: Record<Strength, number> = { light: 3, balanced: 5, aggressive: 8 };
 const FORMAL_PURPOSES: ReadonlySet<string> = new Set(["essay", "report", "business", "legal", "cover-letter"]);
 
 function buildProfile(o: HumanizeOptions): Profile {
-  let contractionRate = { "high-school": 0.85, university: 0.5, doctorate: 0.15, journalist: 0.8, marketing: 0.9 }[
+  let contractionRate: number = { "high-school": 0.85, university: 0.5, doctorate: 0.15, journalist: 0.8, marketing: 0.9 }[
     o.readability
   ];
   if (["story", "marketing", "cover-letter", "general"].includes(o.purpose)) contractionRate = Math.min(0.95, contractionRate + 0.1);
   if (["legal", "report"].includes(o.purpose)) contractionRate = Math.min(contractionRate, 0.15);
   if (["essay", "business", "article"].includes(o.purpose)) contractionRate = Math.min(contractionRate, 0.55);
+  if (o.strength === "light") contractionRate *= 0.6;
+  if (o.strength === "aggressive" && contractionRate > 0.2) contractionRate = Math.min(0.95, contractionRate + 0.25);
   const simpleReader = ["high-school", "journalist", "marketing"].includes(o.readability);
   return {
     minWeight: THRESHOLD[o.strength],
@@ -68,6 +80,9 @@ function buildProfile(o: HumanizeOptions): Profile {
     varyChance: VARY_CHANCE[o.strength],
     notOnly: o.strength !== "light",
     formal: o.readability === "doctorate" || FORMAL_PURPOSES.has(o.purpose),
+    restructure: RESTRUCTURE[o.strength],
+    dashes: o.strength !== "light",
+    deep: o.strength === "aggressive",
   };
 }
 
@@ -295,16 +310,22 @@ const CONNECTOR_JOIN: ReadonlyArray<readonly [RegExp, string]> = [
   [/^(?:then|after that|next|later)[,:]?\s+/i, ", then "],
 ];
 
+const CONTINUES_RE = /^(?:it|they|this|that|these|those|we|i|you|he|she|its|their)\b/i;
+const HAS_COORDINATION_RE = /,[^\S\n]+(?:and|but|so|yet|then)[^\S\n]/i;
+
 /** Joins two sentences into one clause pair, folding a leading connector into the join. */
 function joinPair(a: string, b: string, proper: Set<string>): string | null {
   if (NO_JOIN_HEAD.test(a) || looksImperative(a)) return null;
+  // A sentence that already coordinates clauses would end up with "..., and ..., and ...".
+  if (HAS_COORDINATION_RE.test(a) || HAS_COORDINATION_RE.test(b)) return null;
   const head = a.replace(/\.$/, "");
   for (const [re, joiner] of CONNECTOR_JOIN) {
     const m = re.exec(b);
     if (m) return `${head}${joiner}${lowerFirst(b.slice(m[0].length), proper)}`;
   }
-  // Without a connector an instruction must stay its own sentence, or "..., and start small" slips through.
-  if (NO_MERGE_STARTS.test(b) || looksImperative(b)) return null;
+  // Without a connector, only a sentence that continues the same thought ("It ...", "They ...") is
+  // joined; gluing a new topic on with ", and" reads worse than leaving two sentences.
+  if (NO_MERGE_STARTS.test(b) || looksImperative(b) || !CONTINUES_RE.test(b)) return null;
   return `${head}, and ${lowerFirst(b, proper)}`;
 }
 
@@ -347,6 +368,153 @@ function varyRhythm(sentences: string[], rng: Rng, proper: Set<string>, chance: 
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Structural rewrites: the patterns current models overuse are structural
+// (contrast framing, participial tails, em-dash asides), so swapping words
+// alone leaves them intact. Each rewrite keeps the content and changes the frame.
+// ---------------------------------------------------------------------------
+
+const SP = "[^\\S\\n]";
+const NOT_COPULA = `(?:['’]s${SP}+not|${SP}+is${SP}+not|${SP}+isn['’]t|${SP}+was${SP}+not|${SP}+wasn['’]t)`;
+
+/** "That's not a failing. It's a design problem" -> "That's a design problem rather than a failing". */
+const DENY_THEN_ASSERT_RE = new RegExp(
+  `\\b(It|That|This|The${SP}[a-z]+)${NOT_COPULA}${SP}+(about${SP}+|to${SP}+)?([^.;—–!?\\n]{2,70}?)${SP}*(?:[.;]|—|–|${SP}-)${SP}*(?:\\1|[Ii]t|[Tt]hat|[Tt]his)(['’]s|${SP}+is|${SP}+was)${SP}+(?:about${SP}+|to${SP}+)?([^.!?;,\\n]{2,110})`,
+  "g",
+);
+/** "It isn't — it's about focus" -> "In practice it's about focus". */
+const BARE_DENIAL_RE = new RegExp(
+  `\\b(It|That|This)${SP}+(?:isn['’]t|is${SP}+not)${SP}*(?:—|–|-|;|\\.)${SP}*(?:it|that|this)(['’]s|${SP}+is)${SP}+`,
+  "gi",
+);
+/** "is not where people work but how they decide" -> "is how they decide rather than where people work". */
+const NOT_BUT_RE = new RegExp(
+  `\\b(is|are|was|were)${SP}+not${SP}+(just${SP}+|merely${SP}+|simply${SP}+|only${SP}+)?([^,.;:!?—–\\n]{2,60}?),?${SP}+but${SP}+(?:rather${SP}+|also${SP}+)?([^,.;:!?—–\\n]{2,110})`,
+  "g",
+);
+/** "less about distance than about clarity" / "less about proving yourself and more about learning". */
+const LESS_MORE_RE = new RegExp(
+  `\\bless${SP}+about${SP}+([^.!?,;\\n]{2,60}?),?${SP}+(?:than|and${SP}+more)${SP}+(?:about${SP}+)?([^.!?,;\\n]{2,90})`,
+  "g",
+);
+/** "it shows engagement, not weakness." -> "it shows engagement rather than weakness." */
+/** "not as an amenity but as infrastructure" -> "as infrastructure rather than as an amenity". */
+const NOT_AS_RE = new RegExp(`\\bnot${SP}+as${SP}+([^,.;:!?\\n]{2,50}?),?${SP}+but${SP}+as${SP}+([^,.;:!?\\n]{2,60})`, "g");
+/** "sales, marketing, and product" -> "sales and marketing, as well as product". */
+const TRIPLET_REWRITE_RE = new RegExp(
+  `\\b([\\p{L}-]+(?:${SP}[\\p{L}-]+)?),${SP}+([\\p{L}-]+(?:${SP}[\\p{L}-]+)?),?${SP}+and${SP}+(?=[\\p{L}-]+(?:${SP}[\\p{L}-]+){0,2}[.!?])`,
+  "u",
+);
+const NUMBER_WORD_RE = /\b(?:one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|first|second|third)\b/i;
+const TRAILING_NOT_RE = new RegExp(`,${SP}+not${SP}+([^.!?,;\\n]{2,40})([.!?])`, "g");
+const HERES_THE_THING_RE = new RegExp(`\\bhere['’]s${SP}+the${SP}+thing${SP}*[:,—–-]?${SP}*`, "gi");
+const DASH_PAIR_RE = new RegExp(`([\\p{L}\\p{N}"”’')])${SP}*—${SP}*([^—.!?\\n]{3,70}?)${SP}*—${SP}*(?=[\\p{L}\\p{N}"“‘'])`, "gu");
+const DASH_RE_G = new RegExp(`${SP}*(?:—|${SP}–${SP})${SP}*`, "g");
+const OWN_SENTENCE_RE = /^(?:it|that|this|they|there|we|he|she)(?:['’](?:s|re|ll|ve)|[^\S\n]+[a-z]+)\b/i;
+
+/** Third-person present of verbs that commonly open a participial tail. */
+const THIRD_PERSON: Record<string, string> = {
+  highlighting: "highlights", underscoring: "underscores", emphasizing: "emphasizes", emphasising: "emphasises",
+  showcasing: "showcases", showing: "shows", stressing: "stresses", reflecting: "reflects",
+  demonstrating: "demonstrates", indicating: "indicates", suggesting: "suggests", signaling: "signals",
+  signalling: "signals", illustrating: "illustrates", creating: "creates", making: "makes", leading: "leads",
+  resulting: "results", ensuring: "ensures", allowing: "allows", enabling: "enables", providing: "provides",
+  giving: "gives", offering: "offers", bringing: "brings", leaving: "leaves", turning: "turns", helping: "helps",
+  keeping: "keeps", adding: "adds", raising: "raises", mitigating: "mitigates", reducing: "reduces",
+  increasing: "increases", improving: "improves", driving: "drives", fostering: "fosters", building: "builds",
+  encouraging: "encourages", supporting: "supports", strengthening: "strengthens", boosting: "boosts",
+  opening: "opens", reinforcing: "reinforces", paving: "paves", marking: "marks", causing: "causes",
+  forcing: "forces", letting: "lets", putting: "puts", setting: "sets", cutting: "cuts", easing: "eases",
+  inviting: "invites", contributing: "contributes", positioning: "positions", cementing: "cements",
+  shaping: "shapes", transforming: "transforms", pointing: "points", meaning: "means", saving: "saves",
+  freeing: "frees", lowering: "lowers", limiting: "limits", exposing: "exposes", revealing: "reveals",
+};
+
+/** "It" and "That" take "'s"; "This" and noun subjects need the full verb ("This is", "The goal is"). */
+function assertVerb(subject: string, verb: string): string {
+  const v = verb.trim();
+  if (/^['’]s$/.test(v)) return /^(?:it|that)$/i.test(subject) ? "'s" : " is";
+  return ` ${v}`;
+}
+
+const PAST_TENSE_RE =
+  /\b(?:was|were|had|did|grew|led|made|became|began|came|went|took|saw|said|gave|found|rose|fell|voted|[a-z]{3,}ed)\b/i;
+
+/** ", creating trust that lasts." -> ". That creates trust that lasts." Skipped in past-tense narration. */
+function splitParticipialTail(s: string, rng: Rng): string {
+  const verb = participialTail(s);
+  const third = verb ? THIRD_PERSON[verb] : undefined;
+  if (!verb || !third) return s;
+  const at = s.toLowerCase().lastIndexOf(verb);
+  const comma = s.lastIndexOf(",", at);
+  if (comma < 0) return s;
+  const main = s.slice(0, comma);
+  // A present-tense "That creates..." after past-tense narration would switch tense, so leave those.
+  if (tokenizeWords(main).length < 5 || PAST_TENSE_RE.test(main)) return s;
+  const rest = s.slice(at + verb.length);
+  return `${main}. ${pick(rng, ["That", "This"]) ?? "That"} ${third}${rest}`;
+}
+
+/** "While its benefits were real, it had costs." -> "Its benefits were real, but it had costs." */
+function flipConcession(s: string): string {
+  const m = /^(While|Although|Though|Even though)[^\S\n]+([^,]{8,110}),[^\S\n]+([\s\S]{12,})$/.exec(s);
+  if (!m) return s;
+  const first = /^[\p{L}'’-]+/u.exec(m[2])?.[0] ?? "";
+  // "While working from home, ..." has no subject of its own; leave it.
+  if (/ing$/i.test(first) || !/\b(?:is|are|was|were|has|have|had|can|could|will|would|do|does|did|may|might|must|[a-z]+s|[a-z]+ed)\b/i.test(m[2])) return s;
+  const tailFirst = /^[\p{L}'’-]+/u.exec(m[3])?.[0] ?? "";
+  const tail = tailFirst === "I" || /^I['’]/.test(tailFirst) ? m[3] : m[3].charAt(0).toLowerCase() + m[3].slice(1);
+  return `${capitalize(m[2])}, but ${tail}`;
+}
+
+function rewriteDashes(s: string): string {
+  let out = s.replace(DASH_PAIR_RE, "$1, $2, ");
+  out = out.replace(DASH_RE_G, (m, offset: number) => {
+    // Only a tail that is plainly its own sentence ("— it's a design problem") becomes one;
+    // anything else could be a fragment, so it gets a comma.
+    const tail = out.slice(offset + m.length);
+    const head = /[^.!?\n]*$/.exec(out.slice(0, offset))?.[0] ?? "";
+    return OWN_SENTENCE_RE.test(tail) && tokenizeWords(head).length >= 4 ? ". " : ", ";
+  });
+  return out;
+}
+
+/** Applies the structural rewrites to one line of text. */
+function restructure(segment: string, profile: Profile, rng: Rng): string {
+  if (profile.restructure <= 0 && !profile.dashes) return segment;
+  const roll = () => rng() < profile.restructure;
+  let out = segment;
+  if (profile.restructure > 0) {
+    out = out.replace(BARE_DENIAL_RE, (m, _subj: string, verb: string) => (roll() ? `In practice it${verb.trim() === "is" ? " is" : "'s"} ` : m));
+    out = out.replace(DENY_THEN_ASSERT_RE, (m, subj: string, prep: string | undefined, a: string, verb: string, b: string) =>
+      roll() ? `${subj}${assertVerb(subj, verb)} ${prep ?? ""}${b.trim()} rather than ${a.trim()}` : m,
+    );
+    out = out.replace(NOT_BUT_RE, (m, verb: string, also: string | undefined, a: string, b: string) => {
+      // "are not without risk, but they position us..." joins two clauses; only noun-like pairs can swap.
+      if (/^without\b/i.test(a) || CLAUSE_SUBJECT.test(b.trim()) || !roll()) return m;
+      return also ? `${verb} ${b.trim()} as much as ${a.trim()}` : `${verb} ${b.trim()} rather than ${a.trim()}`;
+    });
+    out = out.replace(NOT_AS_RE, (m, a: string, b: string) => (roll() ? `as ${b.trim()} rather than as ${a.trim()}` : m));
+    out = out.replace(LESS_MORE_RE, (m, a: string, b: string) => (roll() ? `mainly about ${b.trim()} and only partly about ${a.trim()}` : m));
+    out = out.replace(TRAILING_NOT_RE, (m, a: string, end: string) => (roll() ? ` rather than ${a}${end}` : m));
+  }
+  if (profile.deep) out = out.replace(HERES_THE_THING_RE, "");
+  if (profile.dashes) out = rewriteDashes(out);
+  if (profile.restructure <= 0) return out;
+  const parts = splitSentences(out).map((sp) => {
+    let s = sp.text;
+    if (profile.deep && isSignpost(s) && /^(?:so|but)\b[^.!?]*\?$/i.test(s.trim())) return "";
+    if (roll()) s = flipConcession(s);
+    if (roll()) s = splitParticipialTail(s, rng);
+    // Tidy three-item lists are a model habit; a deep rewrite regroups some of them.
+    if (profile.deep && rng() < 0.6) {
+      s = s.replace(TRIPLET_REWRITE_RE, (m, a: string, b: string) => (NUMBER_WORD_RE.test(`${a} ${b}`) ? m : `${a} and ${b}, as well as `));
+    }
+    return s;
+  });
+  return parts.filter((s) => s.length > 0).join(" ");
+}
+
 function rewriteSegment(
   segment: string,
   profile: Profile,
@@ -354,7 +522,7 @@ function rewriteSegment(
   proper: Set<string>,
   avoid: { last: string },
 ): string {
-  const spans = splitSentences(segment);
+  const spans = splitSentences(restructure(segment, profile, rng));
   if (spans.length === 0) return segment;
 
   const rewritten = spans.map((sp) => {
@@ -395,7 +563,9 @@ function rewriteText(text: string, profile: Profile, rng: Rng): string {
       }
       if (inCode || line.trim().length === 0) return line;
       const prefix = LINE_PREFIX_RE.exec(line)?.[1] ?? "";
-      const body = line.slice(prefix.length);
+      let body = line.slice(prefix.length);
+      // "- **Label**: text" is a model habit; a deep rewrite keeps the label and drops the bold.
+      if (profile.deep && prefix) body = body.replace(/^\*\*([^*\n]{2,60})\*\*/, "$1");
       return prefix + rewriteSegment(body, profile, rng, proper, avoid);
     })
     .join("\n");
@@ -424,7 +594,6 @@ export function countEdits(before: string, after: string): number {
 
 /** Texts up to this many words get several candidate rewrites; the lowest-scoring one wins. */
 const BEST_OF_MAX_WORDS = 3000;
-const BEST_OF = 5;
 
 function rewriteOnce(normalized: string, options: HumanizeOptions, profile: Profile, seed: number): string {
   const rng = createRng((hashString(normalized) ^ Math.imul(seed, 2654435761)) >>> 0);
@@ -445,7 +614,7 @@ export function humanizeText(text: string, options: HumanizeOptions): HumanizeRe
   const normalized = normalizeText(text);
   const profile = buildProfile(options);
   const seed = options.seed ?? 1;
-  const tries = tokenizeWords(normalized).length <= BEST_OF_MAX_WORDS ? BEST_OF : 1;
+  const tries = tokenizeWords(normalized).length <= BEST_OF_MAX_WORDS ? BEST_OF[options.strength] : 1;
   let best: { text: string; after: DetectionResult } | null = null;
   for (let i = 0; i < tries; i++) {
     const candidate = rewriteOnce(normalized, options, profile, seed + i * 7919);

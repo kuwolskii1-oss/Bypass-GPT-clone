@@ -185,7 +185,7 @@ export function maxSaving(period: PeriodId): number {
 export const FAQS = [
   {
     q: "How does the AI detector work?",
-    a: "Prosely measures the statistical fingerprints that language models leave behind: uniform sentence rhythm, low vocabulary variety, stock transitions and phrases, and a lack of the small irregularities people naturally write with. It scores every sentence and combines those into a document score.",
+    a: "Prosely looks for the habits language models leave behind. Older models gave themselves away with stock phrases and formulaic transitions; current ones are subtler, so we also measure structure: contrast framing (\"not X but Y\"), sentences that announce their own point, trailing \"-ing\" clauses, em-dash asides, tidy lists of three, even rhythm and markdown scaffolding. Quotations and citations are set aside so they are not counted as your voice. Every sentence is scored, and the breakdown names what stood out.",
   },
   {
     q: "Are the detector results the same as GPTZero, Turnitin or Originality.ai?",

@@ -121,7 +121,20 @@ export interface TextMetrics {
   /** Flesch-Kincaid grade level. */
   readingGrade: number;
   /** Number of distinct punctuation kinds used (?, !, ;, :, —, (), quotes). */
-  punctuationVariety: number;
+  punctuationVariety: number;  /** Contrast framings ("not X but Y", "It isn't X. It's Y.") per sentence. */
+  contrastRate: number;
+  /** Share of sentences ending in a participial tail (", highlighting ..."). */
+  participialRate: number;
+  /** Share of sentences that announce their own point ("The real question is..."). */
+  signpostRate: number;
+  /** Paired abstractions ("clarity and focus") per sentence. */
+  doubletRate: number;
+  /** Em dashes per 100 words. */
+  dashRate: number;
+  /** Share of words inside quotation marks, 0..1. */
+  quotedShare: number;
+  /** Markdown headings and bold-label bullets found. */
+  structureMarks: number;
 }
 
 export interface DetectorEstimate {
@@ -136,7 +149,7 @@ export interface DetectorEstimate {
 }
 
 export interface TextFlag {
-  id: "hidden-characters" | "homoglyphs" | "irregular-spacing" | "very-short";
+  id: "hidden-characters" | "homoglyphs" | "irregular-spacing" | "very-short" | "mostly-quoted";
   label: string;
   description: string;
   count?: number;

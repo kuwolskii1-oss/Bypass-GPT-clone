@@ -1,6 +1,7 @@
 import { Flag } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { ScoreGauge, VERDICT_TEXT_CLASS } from "@/components/workspace/ScoreGauge";
+import { styleSignals } from "@/lib/engine/style";
 import type { DetectionResult } from "@/lib/engine/types";
 import { CONFIDENCE_TEXT, VERDICT_TEXT, scoreNote } from "@/lib/report";
 import { cn } from "@/lib/utils";
@@ -108,6 +109,28 @@ export function MetricsStrip({ result, className }: { result: DetectionResult; c
   );
 }
 
+/** The structural habits behind the score, as chips with an explanation on hover. */
+export function StyleSignals({ result, className }: { result: DetectionResult; className?: string }) {
+  const signals = styleSignals(result.metrics);
+  if (signals.length === 0 || result.tooShort) return null;
+  return (
+    <div className={className}>
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.12em] text-faint">What stands out</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {signals.map((s) => (
+          <li
+            key={s.id}
+            title={s.detail}
+            className="cursor-help rounded-full border border-line bg-canvas px-2.5 py-1 text-xs text-ink-2"
+          >
+            {s.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** Gauge + verdict + legend, used under the editor after a check or a rewrite. */
 export function Breakdown({
   result,
@@ -140,6 +163,7 @@ export function Breakdown({
           <Legend result={result} className="mt-3" />
         </div>
       </div>
+      <StyleSignals result={result} className="mt-5" />
       <MetricsStrip result={result} className="mt-5 border-t border-line pt-4" />
       <Flags result={result} className="mt-4" />
     </section>
