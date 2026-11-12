@@ -1,7 +1,8 @@
 "use client";
 
-import { ClipboardPaste, FileText, Upload, X } from "lucide-react";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { ClipboardPaste, FileText, FileUp, Loader2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { ACCEPT_ATTRIBUTE, DocumentError, extractDocumentText } from "@/lib/documents";
 import { SAMPLES } from "@/lib/engine/samples";
 import { cn, countWords, formatNumber } from "@/lib/utils";
 
@@ -24,6 +25,10 @@ export function Editor({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [reading, setReading] = useState<string | null>(null);
+  const [fileNote, setFileNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const dragDepth = useRef(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,24 +61,79 @@ export function Editor({
     window.setTimeout(() => setPasteHint(null), 2200);
   };
 
+  const loadFile = async (file: File) => {
+    setFileNote(null);
+    setReading(file.name);
+    try {
+      const doc = await extractDocumentText(file);
+      onChange(doc.text);
+      setFileNote({ tone: "ok", text: `Loaded ${doc.name} · ${formatNumber(countWords(doc.text))} words` });
+    } catch (err) {
+      setFileNote({
+        tone: "error",
+        text: err instanceof DocumentError ? err.message : `${file.name} couldn't be read. Paste the text instead.`,
+      });
+    } finally {
+      setReading(null);
+    }
+  };
+
   const onFile = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
-    const text = await file.text();
-    onChange(text);
+    if (file) await loadFile(file);
+  };
+
+  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  const onDragEnter = (e: DragEvent) => {
+    if (disabled || !hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  };
+  const onDragOver = (e: DragEvent) => {
+    if (disabled || !hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+  const onDragLeave = (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragging(false);
+  };
+  const onDrop = async (e: DragEvent) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    if (disabled) return;
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    await loadFile(files[0]);
+    if (files.length > 1) {
+      setFileNote((n) => (n?.tone === "ok" ? { tone: "ok", text: `${n.text} · only the first file was used` } : n));
+    }
   };
 
   const counterTone = over ? "text-ai" : under ? "text-mixed" : "text-muted";
   const progress = Math.min(100, (words / maxWords) * 100);
 
   return (
-    <div className={cn("relative flex min-w-0 flex-col", className)}>
+    <div
+      className={cn("relative flex min-w-0 flex-col", className)}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <textarea
         ref={textRef}
         value={value}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          if (fileNote) setFileNote(null);
+          onChange(e.target.value);
+        }}
         placeholder="Paste or type your text here…"
         spellCheck={false}
         aria-label="Text to analyze"
@@ -83,7 +143,31 @@ export function Editor({
         )}
       />
 
-      {empty && !disabled && (
+      {(dragging || reading) && (
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed text-center",
+            dragging ? "border-accent bg-accent-soft/90" : "border-line-strong bg-canvas/90",
+          )}
+          role="status"
+          aria-live="polite"
+        >
+          {reading ? (
+            <>
+              <Loader2 className="size-6 animate-spin text-accent" aria-hidden />
+              <p className="text-sm font-medium text-ink">Reading {reading}…</p>
+            </>
+          ) : (
+            <>
+              <FileUp className="size-7 text-accent" aria-hidden />
+              <p className="text-sm font-medium text-accent-strong">Drop your document to load it</p>
+              <p className="text-xs text-muted">.docx, .pdf, .txt or .md · up to 10 MB</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {empty && !disabled && !reading && !dragging && (
         <div className="pointer-events-none absolute inset-x-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-3 px-4">
           <div className="pointer-events-auto flex flex-wrap justify-center gap-2" ref={menuRef}>
             <EmptyAction icon={<ClipboardPaste className="size-4" />} label="Paste text" onClick={paste} />
@@ -117,12 +201,35 @@ export function Editor({
                 </div>
               )}
             </div>
-            <EmptyAction icon={<Upload className="size-4" />} label="Upload .txt" onClick={() => fileRef.current?.click()} />
+            <EmptyAction icon={<Upload className="size-4" />} label="Upload file" onClick={() => fileRef.current?.click()} />
           </div>
+          <p className="text-xs text-faint">or drop a .docx, .pdf, .txt or .md file here</p>
           {pasteHint && <p className="text-xs text-muted">{pasteHint}</p>}
         </div>
       )}
-      <input ref={fileRef} type="file" accept=".txt,.md,text/plain" className="hidden" onChange={onFile} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept={ACCEPT_ATTRIBUTE}
+        className="hidden"
+        onChange={onFile}
+        aria-label="Upload a document"
+      />
+
+      {fileNote && (
+        <p
+          role={fileNote.tone === "error" ? "alert" : "status"}
+          className={cn(
+            "flex items-start justify-between gap-3 border-t border-line px-4 py-2 text-xs",
+            fileNote.tone === "error" ? "bg-ai-soft text-ai" : "text-muted",
+          )}
+        >
+          <span>{fileNote.text}</span>
+          <button type="button" onClick={() => setFileNote(null)} aria-label="Dismiss" className="shrink-0 opacity-70 hover:opacity-100">
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </p>
+      )}
 
       <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
@@ -139,14 +246,27 @@ export function Editor({
           </span>
         </div>
         {!empty && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            disabled={disabled}
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:bg-surface hover:text-ink"
-          >
-            <X className="size-3.5" aria-hidden /> Clear
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={disabled || Boolean(reading)}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Upload className="size-3.5" aria-hidden /> Upload
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFileNote(null);
+                onChange("");
+              }}
+              disabled={disabled}
+              className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <X className="size-3.5" aria-hidden /> Clear
+            </button>
+          </div>
         )}
       </div>
     </div>

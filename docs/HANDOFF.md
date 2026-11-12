@@ -42,7 +42,7 @@ walterwrites.ai returns a Cloudflare 403 to curl but loads fine in the browser. 
 1. **Icons.** If Flaticon "symbol" icons are wanted, download the specific SVGs, put them in `public/icons/`, and add the attribution line Flaticon requires to the footer. Otherwise keep Lucide.
 2. **Remaining items from `docs/research/prosely.md`:** footer links to About / Blog / Terms / Privacy point at anchors that do not exist (add simple pages or drop them); the paid CTAs land on the demo dashboard until billing exists; the report could use next / previous sentence navigation.
 3. **Humanizer depth.** The rule engine cannot lower formal, contraction-free prose much below the mid 40s because the detector rewards signals the rewriter deliberately does not fake (first person, casual markers). The next lever is a small paraphrase model or the Claude engine. Keep `npm test` green: `rewrites.test.ts` encodes the misfires that were fixed.
-4. **Product depth** (in order): accounts (NextAuth or Clerk), Stripe checkout for the 1 / 4 / 12 week terms, server-side history and usage, DOCX/PDF upload, public API keys.
+4. **Product depth** (in order): accounts (NextAuth or Clerk), Stripe checkout for the 1 / 4 / 12 week terms, server-side history and usage, public API keys. (DOCX/PDF/TXT upload and drag-and-drop shipped in `src/lib/documents.ts`; OCR for scanned PDFs is not done.)
 5. **Always** run `npm test && npm run lint && npm run typecheck && npm run build` before pushing, commit small, and push after every completed step.
 
 ## Handy commands

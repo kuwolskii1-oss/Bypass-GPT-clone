@@ -7,6 +7,7 @@ A clean, production-shaped clone of the AI-detection and humanizer category (Und
 - **AI Detector** — paste text, get a document score, a verdict, and every sentence highlighted (AI / mixed / human). Click a sentence to see the tells behind its score. Flags hidden characters, look-alike letters and irregular spacing.
 - **Detector estimates** — one panel estimates how 12 public detectors (GPTZero, Turnitin, Originality.ai, Copyleaks, ZeroGPT, Winston, Sapling, Writer, QuillBot, Grammarly, Crossplag, Content at Scale) would likely score the text. These are estimates from our own model, labelled as such everywhere; they are not live third-party results.
 - **Writing report** — a Turnitin-like layout: document on the left, "Submission breakdown" on the right with the percentage of qualifying text, a segmented bar, legend, flags and disclaimers. Below 20% the score shows as `*` and highlights are off by default. Downloadable as a standalone HTML file.
+- **Document upload** — drop a .docx, .pdf, .txt or .md file onto the editor or use Upload file (10 MB max). Text is extracted in the browser: DOCX with the built-in `DecompressionStream`, PDF with pdf.js loaded on demand (`src/lib/documents.ts`). Scanned PDFs without a text layer, password-protected PDFs and legacy .doc files get a clear message instead.
 - **Humanizer** — rewrites text with controls for readability (High school → Marketing), purpose (Essay, Article, Cover letter, Legal…), strength (Light / Balanced / Aggressive) and a keep-keywords list that is preserved verbatim. Output shows before/after scores, an edit count, a Highlights tab and a word-level Compare diff. Re-humanize produces a new variant.
 - **Dashboard** — usage ring against the free allowance (1,500 words per rolling 4 weeks), history of checks and rewrites (kept in the browser), reopen any entry.
 - **Marketing site** — landing page with the tool embedded in the hero, how it works, features, report preview, detector grid, use cases, comparison, testimonials, pricing with a 1 / 4 / 12 week term switch, FAQ, and a pricing page with a compare table.
@@ -76,4 +77,4 @@ Light-first, one calm violet accent, status colours reserved for human / mixed /
 
 ## What is intentionally not here yet
 
-Accounts and billing (Stripe), server-side history, DOCX/PDF upload, a Chrome extension and public API keys. The plan limits, usage counter and rate limiter are wired so those can be added without changing the UI.
+Accounts and billing (Stripe), server-side history, OCR for scanned PDFs, a Chrome extension and public API keys. The plan limits, usage counter and rate limiter are wired so those can be added without changing the UI.
