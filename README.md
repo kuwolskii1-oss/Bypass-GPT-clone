@@ -42,7 +42,7 @@ The humanizer works offline with a deterministic rule engine. Set `ANTHROPIC_API
 
 ## Standalone page
 
-`npm run build:artifact` bundles the engine into `artifact/prosely.html`, a single self-contained page with the humanizer, detector, breakdown, detector estimates and document upload (drag-and-drop or Upload file; PDF text comes from pdf.js 5.4.296 on cdnjs) that runs entirely in the browser (no server, no key). `artifact/prosely.template.html` is the page; the script inlines the engine where the `/*__ENGINE__*/` placeholder sits. The built page is committed so it can be published as-is.
+`npm run build:artifact` bundles the engine into `artifact/prosely.html`, a single self-contained page with the humanizer, detector, breakdown, detector estimates and document upload (drag-and-drop or Upload file; PDF text comes from pdf.js 5.4.296 on cdnjs) that runs entirely in the browser (no server, no key). `artifact/prosely.template.html` is the page; the script inlines the engine where the `/*__ENGINE__*/` placeholder sits. The built page is committed so it can be published as-is. When it is published as a Claude artifact with the `sample` capability, the page offers a **Claude** engine: it asks Claude for the rewrite through the artifact runtime (no API key), scores the draft with the local detector, and sends still-flagged sentences back once with the reasons. Without that capability, or if the viewer declines, it falls back to the instant rule engine.
 
 ## How the engine works
 

@@ -85,6 +85,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body {
     margin: 0;
     background: var(--canvas);
@@ -221,7 +222,8 @@
   .empty strong { font-weight: 500; }
   .empty p { margin: 0; max-width: 32ch; font-size: 12px; color: var(--muted); }
   .skeleton { flex: 1; min-height: 260px; padding: 20px; }
-  .skeleton p { margin: 0 0 16px; font-size: 12px; color: var(--muted); }
+  .skeleton p { margin: 0 0 16px; font-size: 12px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .live { white-space: pre-wrap; font-size: 15px; line-height: 1.8; color: var(--ink-2); }
   .shimmer { height: 14px; border-radius: 6px; margin-bottom: 12px; background: linear-gradient(90deg, var(--surface) 0%, var(--surface-2) 50%, var(--surface) 100%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
   @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
   @media (prefers-reduced-motion: reduce) { .shimmer, .dot.busy { animation: none; } }
@@ -329,7 +331,7 @@
         <span class="brand-tag">AI detector + humanizer</span>
       </div>
     </div>
-    <p>Everything runs in this page with the rule engine: no server, no account. Scores are estimates from our own model, not live results from the detectors named.</p>
+    <p>Detection runs in this page. Rewrites use Claude where it is available, or an instant rule engine. Scores are estimates from our own model, not live results from the detectors named.</p>
   </header>
 
   <main class="card" id="tool">
@@ -383,6 +385,10 @@
         <label class="field"><span class="label">Readability</span><select class="select" id="readability"></select></label>
         <label class="field"><span class="label">Purpose</span><select class="select" id="purpose"></select></label>
         <div class="field" style="width:auto"><span class="label">Strength</span><div class="segmented" id="strength" role="radiogroup" aria-label="Strength"></div></div>
+        <div class="field" id="engineField" style="width:auto" hidden><span class="label">Engine</span><div class="segmented" id="engine" role="radiogroup" aria-label="Rewrite engine">
+          <button type="button" role="radio" data-value="claude" aria-checked="true" title="Claude rewrites the text, then our detector checks it and asks for one revision of anything still flagged. Uses your Claude usage.">Claude</button>
+          <button type="button" role="radio" data-value="rules" aria-checked="false" title="Instant rule-based rewrite that runs in this page. Lighter edits.">Instant</button>
+        </div></div>
         <button class="kw-toggle" id="kwToggle" type="button" aria-expanded="false">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
           Keep keywords
@@ -433,6 +439,7 @@
   const STAGES = {
     humanize: ["Removing AI-typical phrasing…", "Varying sentence rhythm…", "Scoring the result…"],
     detect: ["Splitting into sentences…", "Measuring rhythm and phrasing…", "Estimating 12 detectors…"],
+    claude: ["Asking Claude to rewrite…"],
   };
   const ICON_SPARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17v4M17 19h4M5 3v3M3.5 4.5h3"/></svg>';
   const ICON_SCAN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3.5"/><path d="m15 15 2.5 2.5"/></svg>';
@@ -447,6 +454,7 @@
     text: "",
     options: Object.assign({}, P.DEFAULT_HUMANIZE_OPTIONS, { keepKeywords: [] }),
     seed: 1,
+    engine: "rules",
     detection: null,
     result: null,
     busy: null,
@@ -517,7 +525,8 @@
     out.classList.toggle("hidden-idle", idle);
     if (state.busy) {
       const widths = ["92%", "100%", "84%", "96%", "72%", "88%", "60%"];
-      out.innerHTML = `<div class="skeleton" aria-busy="true" aria-live="polite"><p id="stage">${STAGES[state.busy][0]}</p>${widths.map((w) => `<div class="shimmer" style="width:${w}"></div>`).join("")}</div>`;
+      const stop = state.busy === "claude" ? '<button class="btn ghost" id="stopBtn" type="button">Stop</button>' : "";
+      out.innerHTML = `<div class="skeleton" aria-busy="true"><p><span id="stage" aria-live="polite">${STAGES[state.busy][0]}</span>${stop}</p><div id="live">${widths.map((w) => `<div class="shimmer" style="width:${w}"></div>`).join("")}</div></div>`;
       return;
     }
     if (state.result) {
@@ -526,7 +535,9 @@
       const drop = r.before.aiProbability - r.after.aiProbability;
       const nextStep = v === "human"
         ? "Reads as human-written. Copy it, or re-humanize for another take."
-        : r.options.strength !== "aggressive"
+        : r.engine !== "claude" && sample
+          ? "Still has AI signals. Switch the engine to Claude for a deeper rewrite."
+          : r.options.strength !== "aggressive"
           ? "Still has AI signals. Try Aggressive strength or re-humanize."
           : "Still has AI signals. Re-humanize for a new variant, or edit the amber sentences in Highlights.";
       let body = "";
@@ -544,7 +555,8 @@
         <div class="out-foot">
           <div class="badges">
             ${badge(v, `${r.after.aiProbability}% AI`, true)}
-            <span class="sub">${drop > 0 ? `down from ${r.before.aiProbability}%` : `was ${r.before.aiProbability}%`} · ${r.edits} words changed</span>
+            <span class="sub">${drop > 0 ? `down from ${r.before.aiProbability}%` : `was ${r.before.aiProbability}%`} · ${r.edits} words changed${r.engine === "claude" ? ` · rewritten with Claude${r.passes > 1 ? ", revised once" : ""}` : ""}</span>
+            ${r.note ? `<span class="next-step" style="color:var(--muted)">${esc(r.note)}</span>` : ""}
             <span class="next-step">${nextStep}</span>
           </div>
           <button class="btn ghost" id="rehumanize" type="button">${ICON_REFRESH}Re-humanize</button>
@@ -655,11 +667,13 @@
     $("controls").style.display = state.mode === "humanize" ? "" : "none";
     $("kwRow").classList.toggle("open", state.mode === "humanize" && $("kwToggle").getAttribute("aria-expanded") === "true");
     $("hint").textContent = state.mode === "humanize"
-      ? `Rewrites run locally with the rule engine · ${fmt(P.LIMITS.maxWords)} words per run · Detection is always free`
+      ? sample && state.engine === "claude"
+        ? "Claude rewrites the text and our detector checks the result · uses your Claude usage · Detection is always free"
+        : `Instant rewrites run in this page with the rule engine · ${fmt(P.LIMITS.maxWords)} words per run · Detection is always free`
       : "Detection is free and unlimited · Scores are estimates, not a verdict on authorship";
     const shown = state.result ? state.result.after : state.detection;
     const status = $("status");
-    const label = state.busy === "humanize" ? "Rewriting…" : state.busy === "detect" ? "Checking…" : shown ? `${state.result ? "Done" : "Checked"} · ${shown.aiProbability}% AI` : "Ready";
+    const label = state.busy === "humanize" || state.busy === "claude" ? "Rewriting…" : state.busy === "detect" ? "Checking…" : shown ? `${state.result ? "Done" : "Checked"} · ${shown.aiProbability}% AI` : "Ready";
     status.innerHTML = `<span class="dot ${state.busy ? "busy" : shown ? shown.verdict : "human"}"></span>${label}`;
     const kwCount = keywords().length;
     $("kwToggle").classList.toggle("on", kwCount > 0 || $("kwToggle").getAttribute("aria-expanded") === "true");
@@ -674,7 +688,7 @@
     state.busy = kind; state.selected = null; state.copied = false;
     render();
     let i = 0;
-    stageTimer = window.setInterval(() => { i++; const el = $("stage"); if (el) el.textContent = STAGES[kind][i % STAGES[kind].length]; }, 900);
+    stageTimer = kind === "claude" ? null : window.setInterval(() => { i++; const el = $("stage"); if (el) el.textContent = STAGES[kind][i % STAGES[kind].length]; }, 900);
     $("output").scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
   function finish() { window.clearInterval(stageTimer); state.busy = null; render(); }
@@ -683,8 +697,68 @@
     state.result = null; begin("detect");
     window.setTimeout(() => { state.detection = P.detectText(state.text); finish(); }, 650);
   }
+  // ---------- Claude engine (artifact runtime) ----------
+  let sample = null;
+  let abort = null;
+  function cleanReply(t) {
+    return String(t).replace(/^\s*<text>\s*/i, "").replace(/\s*<\/text>\s*$/i, "").trim();
+  }
+  function showLive(text, stage) {
+    const live = $("live"), st = $("stage");
+    if (st && stage) st.textContent = stage;
+    if (live) { live.className = "live"; live.textContent = text; }
+  }
+  const FALLBACK_NOTE = {
+    not_granted: "Claude wasn't allowed for this page, so the instant engine was used.",
+    sampling_disabled: "Claude isn't available on this account, so the instant engine was used.",
+    rate_limited: "Claude is rate limited right now, so the instant engine was used. Try again in a bit.",
+    refused: "Claude declined this text, so the instant engine was used.",
+    session_expired: "Your Claude session expired, so the instant engine was used. Sign in again to use Claude.",
+  };
+  async function runClaude() {
+    const opts = Object.assign({}, state.options, { keepKeywords: keywords(), seed: state.seed });
+    const original = state.text;
+    begin("claude");
+    abort = new AbortController();
+    const prompt = P.REWRITE_INSTRUCTIONS + "\n\n" + P.buildUserPrompt(original, opts);
+    const ask = (input, stage) => sample(input, { signal: abort.signal, cache: false, onText: ({ text }) => showLive(text, stage) });
+    try {
+      const firstReply = await ask(prompt, "Claude is rewriting…");
+      let text = cleanReply(firstReply.text);
+      let after = P.detectText(text);
+      let passes = 1;
+      let note = firstReply.truncated ? "The rewrite was cut short by a length limit. Try a shorter text." : "";
+      const flagged = P.flaggedSentences(after);
+      if (!firstReply.truncated && opts.strength !== "light" && after.aiProbability >= 35 && flagged.length > 0) {
+        showLive(text, `Scored ${after.aiProbability}% · asking Claude to revise ${flagged.length} flagged sentence${flagged.length === 1 ? "" : "s"}…`);
+        try {
+          const second = await ask([{ role: "user", content: prompt }, { role: "assistant", content: text }, { role: "user", content: P.buildRevisionPrompt(flagged) }], "Claude is revising…");
+          const revised = cleanReply(second.text);
+          const revisedScore = P.detectText(revised);
+          if (!second.truncated && revised.length > text.length * 0.6 && revisedScore.aiProbability < after.aiProbability) { text = revised; after = revisedScore; passes = 2; }
+        } catch (e) {
+          if (e && e.code === "cancelled") note = "Stopped during the revision pass; showing the first rewrite.";
+        }
+      }
+      state.result = { text, original, edits: P.countEdits(original, text), options: opts, before: P.detectText(original), after, engine: "claude", passes, note };
+      state.detection = state.result.before; state.tab = "text";
+      finish();
+    } catch (e) {
+      const code = e && e.code;
+      if (code === "cancelled") { finish(); return; }
+      if (code === "not_granted" || code === "sampling_disabled" || code === "not_declared" || code === "capability_disabled" || code === "capability_removed") {
+        sample = null; state.engine = "rules"; $("engineField").hidden = true;
+      }
+      const r = P.humanizeText(original, opts);
+      r.note = FALLBACK_NOTE[code] || "Claude couldn't finish this rewrite, so the instant engine was used.";
+      state.result = r; state.detection = r.before; state.tab = "text";
+      finish();
+    }
+  }
+
   function runHumanize(reseed) {
     if (reseed) state.seed += 1;
+    if (sample && state.engine === "claude") { runClaude(); return; }
     begin("humanize");
     window.setTimeout(() => {
       const opts = Object.assign({}, state.options, { keepKeywords: keywords(), seed: state.seed });
@@ -768,6 +842,7 @@
     if (!target) return;
     if (target.dataset.tab) { state.tab = target.dataset.tab; renderOutput(); return; }
     if (target.id === "rehumanize") { runHumanize(true); return; }
+    if (target.id === "stopBtn") { if (abort) abort.abort(); return; }
     if (target.id === "humanizeThis") { state.mode = "humanize"; render(); runHumanize(false); return; }
     if (target.id === "toggleLow") { state.showLow = !state.showLow; renderOutput(); return; }
     if (target.id === "copy") {
@@ -788,6 +863,19 @@
     const body = $("output").querySelector(".out-body"); if (!body) return;
     const range = document.createRange(); range.selectNodeContents(body);
     const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  }
+
+  for (const b of $("engine").children) b.addEventListener("click", () => {
+    state.engine = b.dataset.value;
+    for (const x of $("engine").children) x.setAttribute("aria-checked", String(x === b));
+    renderChrome();
+  });
+  // Claude is offered only where the viewer can run it; the page works without it.
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("sample").then((fn) => {
+      if (typeof fn !== "function") return;
+      sample = fn; state.engine = "claude"; $("engineField").hidden = false; renderChrome();
+    }, () => {});
   }
 
   // ---------- first frame: the sample essay, already checked ----------

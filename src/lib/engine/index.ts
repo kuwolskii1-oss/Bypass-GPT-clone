@@ -14,3 +14,4 @@ export {
   type HiddenCharacterReport,
 } from "./text";
 export { styleSignals, type StyleSignal } from "./style";
+export { REWRITE_INSTRUCTIONS, buildRevisionPrompt, buildUserPrompt, flaggedSentences } from "./prompts";
